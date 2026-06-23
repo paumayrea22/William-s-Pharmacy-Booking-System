@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import AppointmentModal from './AppointmentModal';
 
-// Model the exact structure of the SQL schema
 interface Professional {
     id: number;
     full_name: string;
     specialty: string;
+    default_duration_minutes: number;
 }
 
 interface Availability {
@@ -25,25 +26,28 @@ interface Appointment {
     status: string;
 }
 
-// Constants for data formatting and grid generation
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WORKING_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
 export default function Calendar() {
-    // Core state
+    // Core state tracking
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [selectedProfessional, setSelectedProfessional] = useState<string>('');
     const [isStaffLoading, setIsStaffLoading] = useState(true);
 
-    // Contextual state (reacts to the selected professional)
+    // Database reactive context
     const [availabilities, setAvailabilities] = useState<Availability[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isDataLoading, setIsDataLoading] = useState(false);
     
-    // UI state for toggling views
+    // Interface visualization configuration
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    // Synchronization sequencer to force state reload without unmounting components
+    const [refreshKey, setRefreshKey] = useState(0);
 
-    // Initial load: Fetch the list of professionals
+    // Initial effect: Retrieve staff layout mapping
     useEffect(() => {
         const fetchProfessionals = async () => {
             const { data, error } = await supabase
@@ -63,7 +67,7 @@ export default function Calendar() {
         fetchProfessionals();
     }, []);
 
-    // Reactive load: Fetch schedules and appointments when the selected professional changes
+    // Reactive effect: Downloads schedules and records when staff switch or a new record adds up
     useEffect(() => {
         if (!selectedProfessional) return;
 
@@ -99,39 +103,33 @@ export default function Calendar() {
         };
 
         fetchProfessionalData();
-    }, [selectedProfessional]);
+    }, [selectedProfessional, refreshKey]);
 
-    // Utility: Format time from '09:00:00' to '09:00'
     const formatTime = (timeStr: string) => timeStr.substring(0, 5);
 
-    // Utility: Group availabilities by day to avoid repeating the day name
     const groupedAvailabilities = availabilities.reduce((acc, curr) => {
         if (!acc[curr.day_of_week]) acc[curr.day_of_week] = [];
         acc[curr.day_of_week].push(curr);
         return acc;
     }, {} as Record<number, Availability[]>);
 
-    // Utility: Determine the visual state of a specific grid cell
     const getCellStatus = (dayIndex: number, hour: number) => {
-        // 1. Check if there is an appointment at this specific day and hour
         const hasAppointment = appointments.some(appt => {
             const apptDate = new Date(appt.start_time_utc);
-            return apptDate.getDay() === dayIndex && apptDate.getHours() === hour;
+            return apptDate.getDay() === dayIndex && apptDate.getHours() === hour && appt.status !== 'cancelled';
         });
         
-        if (hasAppointment) return 'bg-green-200 border-green-300 text-green-800 font-medium'; // Booked
+        if (hasAppointment) return 'bg-green-200 border-green-300 text-green-800 font-medium';
 
-        // 2. Check if the professional is available during this hour block
         const isAvailable = availabilities.some(avail => {
             const startHour = parseInt(avail.start_time.split(':')[0]);
             const endHour = parseInt(avail.end_time.split(':')[0]);
             return avail.day_of_week === dayIndex && hour >= startHour && hour < endHour;
         });
 
-        if (isAvailable) return 'bg-white border-gray-200'; // Available
+        if (isAvailable) return 'bg-white border-gray-200';
         
-        // 3. Default state: Outside working hours
-        return 'bg-gray-200 border-gray-300'; // Unavailable
+        return 'bg-gray-200 border-gray-300';
     };
 
     return (
@@ -160,7 +158,10 @@ export default function Calendar() {
                         )}
                     </select>
 
-                    <button className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700">
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700"
+                    >
                         + New Appointment
                     </button>
                 </div>
@@ -173,8 +174,6 @@ export default function Calendar() {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-6">
-                        
-                        {/* Header with View Toggle */}
                         <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                             <h2 className="text-lg font-semibold text-gray-800">Weekly Schedule</h2>
                             <div className="flex rounded-md shadow-sm">
@@ -193,16 +192,13 @@ export default function Calendar() {
                             </div>
                         </div>
 
-                        {/* Conditional Rendering based on viewMode */}
                         {viewMode === 'list' ? (
                             <div className="grid gap-6 md:grid-cols-2">
-                                {/* Formatted List View */}
                                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                                     {Object.keys(groupedAvailabilities).length === 0 ? (
                                         <p className="text-sm text-gray-500">No schedules configured for this professional.</p>
                                     ) : (
                                         <div className="space-y-4">
-                                            {/* We sort the keys so Monday(1) comes before Tuesday(2), etc. */}
                                             {Object.keys(groupedAvailabilities).sort().map((dayStr) => {
                                                 const dayIndex = parseInt(dayStr);
                                                 return (
@@ -223,7 +219,6 @@ export default function Calendar() {
                                     )}
                                 </div>
                                 
-                                {/* Booked Appointments Panel */}
                                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm h-fit">
                                     <h3 className="font-semibold text-gray-800 mb-2">Booked Appointments</h3>
                                     {appointments.length === 0 ? (
@@ -235,8 +230,8 @@ export default function Calendar() {
                                                 return (
                                                     <li key={appt.id} className="text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">
                                                         <div className="font-medium text-gray-800">{appt.client_name}</div>
-                                                        <div className="text-xs mt-1">
-                                                            {DAYS_OF_WEEK[date.getDay()]} | {formatTime(date.toTimeString())}
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            {DAYS_OF_WEEK[date.getDay()]} | {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </div>
                                                     </li>
                                                 );
@@ -246,13 +241,11 @@ export default function Calendar() {
                                 </div>
                             </div>
                         ) : (
-                            /* Visual Grid View (Timetable Matrix) */
                             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
                                 <table className="w-full text-sm text-left border-collapse">
                                     <thead className="bg-gray-50 text-gray-700">
                                         <tr>
                                             <th className="border border-gray-200 px-4 py-3 font-semibold text-center w-24">Time</th>
-                                            {/* Skip Sunday (0) initially to show Mon-Sat schedule */}
                                             {[1, 2, 3, 4, 5, 6].map(dayIndex => (
                                                 <th key={dayIndex} className="border border-gray-200 px-4 py-3 font-semibold text-center">
                                                     {DAYS_OF_WEEK[dayIndex]}
@@ -269,7 +262,7 @@ export default function Calendar() {
                                                 {[1, 2, 3, 4, 5, 6].map(dayIndex => {
                                                     const cellClass = getCellStatus(dayIndex, hour);
                                                     return (
-                                                        <td key={`${dayIndex}-${hour}`} className={`border px-2 py-4 text-center transition-colors ${cellClass}`}>
+                                                        <td key={`${dayIndex}-${hour}`} className={`border px-2 py-4 text-center transition-colors text-xs ${cellClass}`}>
                                                             {cellClass.includes('green') ? 'Booked' : ''}
                                                         </td>
                                                     );
@@ -283,6 +276,15 @@ export default function Calendar() {
                     </div>
                 )}
             </div>
+
+            {/* Modal integration linked to state rules */}
+            <AppointmentModal 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={() => setRefreshKey(prev => prev + 1)}
+                selectedProfessionalId={selectedProfessional}
+                professionals={professionals}
+            />
         </div>
     );
 }
