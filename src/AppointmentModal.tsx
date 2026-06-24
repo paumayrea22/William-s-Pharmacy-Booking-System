@@ -21,9 +21,11 @@ interface Appointment {
     id: number;
     professional_id: number;
     client_name: string;
+    client_phone: string;
     start_time_utc: string;
     end_time_utc: string;
     status: string;
+    room_number: number;
 }
 
 interface AppointmentModalProps {
@@ -32,9 +34,10 @@ interface AppointmentModalProps {
     onSuccess: () => void;
     selectedProfessionalId: string;
     professionals: Professional[];
+    appointmentToEdit?: Appointment | null; // Nueva propiedad para inyectar datos
 }
 
-export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedProfessionalId, professionals }: AppointmentModalProps) {
+export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedProfessionalId, professionals, appointmentToEdit }: AppointmentModalProps) {
     const [currentUserRole, setCurrentUserRole] = useState<'PHARMACIST' | 'DOCTOR'>('PHARMACIST');
     const [staffUsername, setStaffUsername] = useState('System');
     
@@ -55,23 +58,38 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
     const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
     const [availableSlots, setAvailableSlots] = useState<{ time: string; isBooked: boolean }[]>([]);
     
-    // Invariant anchors: Current time initialized strictly under Malta zone rules
     const [currentMonth, setCurrentMonth] = useState<DateTime>(DateTime.local({ zone: 'Europe/Malta' }));
 
+    // Efecto de inicialización e inyección de datos de edición
     useEffect(() => {
         if (!isOpen) return;
         
-        setModalProfessionalId(selectedProfessionalId);
         setActivePanel('NONE');
-        setConfirmedDate(null);
-        setConfirmedTime(null);
+        setErrorMessage('');
+        setCurrentMonth(DateTime.local({ zone: 'Europe/Malta' }));
+
+        if (appointmentToEdit) {
+            // Rellenar formulario con los datos de la cita existente
+            setModalProfessionalId(appointmentToEdit.professional_id.toString());
+            setClientName(appointmentToEdit.client_name);
+            setClientPhone(appointmentToEdit.client_phone);
+            setRoomNumber(appointmentToEdit.room_number.toString());
+            
+            const oldDate = DateTime.fromISO(appointmentToEdit.start_time_utc, { zone: 'Europe/Malta' });
+            setConfirmedDate(oldDate);
+            setConfirmedTime(oldDate.toFormat('HH:mm'));
+            setCurrentMonth(oldDate);
+        } else {
+            // Formulario vacío por defecto para nuevas reservas
+            setModalProfessionalId(selectedProfessionalId);
+            setConfirmedDate(null);
+            setConfirmedTime(null);
+            setClientName('');
+            setClientPhone('');
+            setRoomNumber('1');
+        }
         setTempDate(null);
         setTempTime(null);
-        setClientName('');
-        setClientPhone('');
-        setErrorMessage('');
-        setRoomNumber('1');
-        setCurrentMonth(DateTime.local({ zone: 'Europe/Malta' }));
 
         const fetchUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -88,7 +106,7 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
             }
         };
         fetchUser();
-    }, [isOpen, selectedProfessionalId, professionals]);
+    }, [isOpen, selectedProfessionalId, professionals, appointmentToEdit]);
 
     useEffect(() => {
         if (!isOpen || !modalProfessionalId) return;
@@ -96,7 +114,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
         const fetchMonthData = async () => {
             const startOfMonth = currentMonth.startOf('month').toUTC().toISO();
             const endOfMonth = currentMonth.endOf('month').toUTC().toISO();
-
             if (!startOfMonth || !endOfMonth) return;
 
             const [availRes, apptRes] = await Promise.all([
@@ -115,7 +132,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
     useEffect(() => {
         if (!confirmedDate || !modalProfessionalId) return;
         
-        // Convert Luxon Sunday(7) to PostgreSQL DOW(0)
         const sqlDayOfWeek = confirmedDate.weekday === 7 ? 0 : confirmedDate.weekday;
         const selectedDateString = confirmedDate.toISODate(); 
         
@@ -126,7 +142,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
         const generatedSlots: { time: string; isBooked: boolean }[] = [];
 
         dayAvails.forEach(avail => {
-            // Build invariant starting timeline markers for iteration loops
             let currentSlot = DateTime.fromISO(`${selectedDateString}T${avail.start_time}`, { zone: 'Europe/Malta' });
             const endTime = DateTime.fromISO(`${selectedDateString}T${avail.end_time}`, { zone: 'Europe/Malta' });
 
@@ -134,6 +149,9 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                 const timeString = currentSlot.toFormat('HH:mm');
                 const isBooked = monthAppointments.some(appt => {
                     const apptDate = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
+                    // Ignorar la cita actual si estamos en modo edición para no auto-bloquearse
+                    if (appointmentToEdit && appt.id === appointmentToEdit.id) return false;
+                    
                     return apptDate.toISODate() === selectedDateString &&
                            apptDate.toFormat('HH:mm') === timeString &&
                            appt.status !== 'cancelled';
@@ -146,7 +164,7 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
         generatedSlots.sort((a, b) => a.time.localeCompare(b.time));
         setAvailableSlots(generatedSlots);
-    }, [confirmedDate, monthAvailabilities, monthAppointments, modalProfessionalId, professionals]);
+    }, [confirmedDate, monthAvailabilities, monthAppointments, modalProfessionalId, professionals, appointmentToEdit]);
 
     if (!isOpen) return null;
 
@@ -169,20 +187,31 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
         const currentProfessional = professionals.find(p => p.id.toString() === modalProfessionalId);
         const durationMinutes = currentProfessional ? currentProfessional.default_duration_minutes : 15;
 
-        // Invariant absolute timestamps generation mapping Malta timezone metrics
         const dateString = confirmedDate.toISODate();
         const startDateTime = DateTime.fromISO(`${dateString}T${confirmedTime}`, { zone: 'Europe/Malta' });
         const endDateTime = startDateTime.plus({ minutes: durationMinutes });
 
-        // Fail-Fast Temporal Firewall
         if (startDateTime < DateTime.local({ zone: 'Europe/Malta' })) {
             setErrorMessage('Validation Error: Cannot book an appointment in the past.');
             setIsSubmitting(false);
             return;
         }
 
+        let isRollbackNeeded = false;
+
         try {
-            // Invoke Stored Procedure RPC to delegate atomic concurrency verification to Postgres
+            // Fase 1: Si es una modificación, cancelar temporalmente la original
+            if (appointmentToEdit) {
+                const { error: cancelError } = await supabase
+                    .from('appointments')
+                    .update({ status: 'cancelled' })
+                    .eq('id', appointmentToEdit.id);
+
+                if (cancelError) throw new Error('System failed to clear original slot.');
+                isRollbackNeeded = true;
+            }
+
+            // Fase 2: Ejecutar RPC de seguridad con los nuevos datos
             const { error: rpcError } = await supabase.rpc('book_appointment_secure', {
                 p_professional_id: parseInt(modalProfessionalId),
                 p_room_number: parseInt(roomNumber),
@@ -193,8 +222,14 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                 p_staff_username: staffUsername
             });
 
+            // Fase 3: Evaluación de Rollback (Revertir cambios si RPC falla)
             if (rpcError) {
-                // Intercept and display controlled error messages thrown by the backend RAISE EXCEPTION
+                if (isRollbackNeeded && appointmentToEdit) {
+                    await supabase
+                        .from('appointments')
+                        .update({ status: 'confirmed' })
+                        .eq('id', appointmentToEdit.id);
+                }
                 throw new Error(rpcError.message);
             }
             
@@ -231,6 +266,7 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                 const timeString = currentSlot.toFormat('HH:mm');
                 const isBooked = monthAppointments.some(appt => {
                     const apptDate = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
+                    if (appointmentToEdit && appt.id === appointmentToEdit.id) return false;
                     return apptDate.toISODate() === selectedDateString &&
                            apptDate.toFormat('HH:mm') === timeString &&
                            appt.status !== 'cancelled';
@@ -248,7 +284,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
     const renderCalendarInner = () => {
         const daysInMonth = currentMonth.daysInMonth ?? 30;
-        // Shift indexing so Monday tracks as position 0
         const firstDayIndex = (currentMonth.startOf('month').weekday + 6) % 7;
         const days = [];
 
@@ -305,9 +340,10 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
             <div className="flex w-full max-w-4xl h-fit max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
                 
-                {/* Left Panel */}
                 <div className="w-1/2 p-6 border-r border-gray-100 bg-gray-50/30 flex flex-col">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-4 shrink-0">Book Appointment</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4 shrink-0">
+                        {appointmentToEdit ? 'Reschedule Appointment' : 'Book Appointment'}
+                    </h2>
                     
                     {errorMessage && (
                         <div className="mb-4 rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-600 font-medium shrink-0">
@@ -328,7 +364,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                                     <option key={prof.id} value={prof.id}>{prof.full_name} ({prof.specialty})</option>
                                 ))}
                             </select>
-                            {currentUserRole === 'DOCTOR' && <span className="text-xs text-blue-600 font-medium mt-1 inline-block">Role locked to current user</span>}
                         </div>
 
                         <div>
@@ -401,13 +436,12 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                                 Cancel & Close
                             </button>
                             <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || !confirmedTime} className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none transition-all">
-                                {isSubmitting ? 'Saving...' : 'Confirm Appointment'}
+                                {isSubmitting ? 'Saving...' : (appointmentToEdit ? 'Confirm Reschedule' : 'Confirm Appointment')}
                             </button>
                         </div>
                     </form>
                 </div>
 
-                {/* Right Panel */}
                 <div className="w-1/2 p-6 bg-white flex flex-col">
                     {activePanel === 'NONE' && (
                         <div className="m-auto flex flex-col items-center justify-center text-gray-400">
