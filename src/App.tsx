@@ -1,25 +1,25 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
-import ProtectedRoute from './ProtectedRoute';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './Layout';
 import Calendar from './Calendar';
+import StaffManagement from './StaffManagement';
+import StressTest from './StressTest';
+import Login from './Login';
+import ProtectedRoute from './ProtectedRoute';
 
 export default function App() {
     return (
-        <BrowserRouter>
+        <Router>
             <Routes>
-                <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<Login />} />
                 
-                {/* Routes injected inside the Layout and protected by the Guardian */}
-                <Route element={
-                    <ProtectedRoute>
-                        <Layout />
-                    </ProtectedRoute>
-                }>
-                    <Route path="/calendar" element={<Calendar />} />
+                <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                    <Route path="/" element={<Calendar />} />
+                    <Route path="/staff" element={<StaffManagement />} />
+                    <Route path="/stress-test" element={<StressTest />} />
                 </Route>
+
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-        </BrowserRouter>
+        </Router>
     );
 }
