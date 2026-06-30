@@ -1,10 +1,14 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+// Import Vercel Analytics library optimized for React/Vite environments
+import { Analytics } from '@vercel/analytics/react';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
     <App />
-  </StrictMode>,
-)
+    {/* Mount telemetry component at the application root to monitor PWA traffic and Core Web Vitals */}
+    <Analytics />
+  </React.StrictMode>
+);
