@@ -13,15 +13,21 @@ CREATE TABLE IF NOT EXISTS holiday_overrides (
 
 ALTER TABLE holiday_overrides ENABLE ROW LEVEL SECURITY;
 
+-- Limpieza de politicas previas para evitar conflictos de sobreescritura
 DROP POLICY IF EXISTS "Enable read access for authenticated users" ON holiday_overrides;
 DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON holiday_overrides;
 DROP POLICY IF EXISTS "Enable delete for authenticated users only" ON holiday_overrides;
 
+-- LECTURA: Todos los usuarios autenticados (Medicos y Farmaceuticos) necesitan leer si la clinica abre
 CREATE POLICY "Enable read access for authenticated users"
 ON holiday_overrides FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Enable insert for authenticated users only"
-ON holiday_overrides FOR INSERT TO authenticated WITH CHECK (true);
+-- ESCRITURA: Solo los usuarios cuyo username empiece por 'P-' (Farmaceuticos) pueden crear excepciones
+CREATE POLICY "Enable insert for pharmacists only"
+ON holiday_overrides FOR INSERT TO authenticated 
+WITH CHECK ((auth.jwt() -> 'user_metadata' ->> 'username')::text LIKE 'P-%');
 
-CREATE POLICY "Enable delete for authenticated users only"
-ON holiday_overrides FOR DELETE TO authenticated USING (true);
+-- BORRADO: Solo los usuarios cuyo username empiece por 'P-' (Farmaceuticos) pueden eliminar excepciones
+CREATE POLICY "Enable delete for pharmacists only"
+ON holiday_overrides FOR DELETE TO authenticated 
+USING ((auth.jwt() -> 'user_metadata' ->> 'username')::text LIKE 'P-%');
