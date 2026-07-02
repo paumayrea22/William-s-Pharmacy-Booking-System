@@ -70,7 +70,6 @@ interface SlotDetails {
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-<<<<<<< HEAD
 const MORNING_SLOTS: { hour: number; minute: number }[] = [];
 for (let hour = 8; hour < 14; hour++) {
     for (const minute of [0, 15, 30, 45]) MORNING_SLOTS.push({ hour, minute });
@@ -80,7 +79,9 @@ const AFTERNOON_SLOTS: { hour: number; minute: number }[] = [];
 for (let hour = 14; hour <= 19; hour++) {
     for (const minute of [0, 15, 30, 45]) AFTERNOON_SLOTS.push({ hour, minute });
 }
-=======
+
+const FULL_DAY_SLOTS: { hour: number; minute: number }[] = [...MORNING_SLOTS, ...AFTERNOON_SLOTS];
+
 // Builds slots from startHour (inclusive) to endHour (exclusive), stepping by the given minute interval
 const buildTimeSlots = (startHour: number, endHour: number, stepMinutes: number): { hour: number; minute: number }[] => {
     const slots: { hour: number; minute: number }[] = [];
@@ -89,10 +90,6 @@ const buildTimeSlots = (startHour: number, endHour: number, stepMinutes: number)
     }
     return slots;
 };
-
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
-
-const FULL_DAY_SLOTS: { hour: number; minute: number }[] = [...MORNING_SLOTS, ...AFTERNOON_SLOTS];
 
 export default function Calendar() {
     const { role, username } = useAuth();
@@ -298,7 +295,6 @@ export default function Calendar() {
         return { status: 'Unavailable' };
     };
 
-<<<<<<< HEAD
     const renderAppointmentCard = (appt: Appointment) => {
         const apptTime = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
         const uiDayIndex = apptTime.weekday === 7 ? 6 : apptTime.weekday - 1;
@@ -310,7 +306,7 @@ export default function Calendar() {
                     <div>
                         <div className="flex items-baseline gap-2">
                             <span className="font-bold text-pharmacy-ink">{appt.client_name}</span>
-                            <span className="text-xs font-mono text-pharmacy-muted">+356 {appt.client_phone}</span>
+                            <span className="text-xs font-mono text-pharmacy-muted">{formatDisplayPhone(appt.client_phone)}</span>
                         </div>
                         <div className="text-xs text-pharmacy-muted mt-0.5">
                             {selectedProfessional === 'ALL' && prof ? <span className="font-bold text-pharmacy-gold-dark mr-1">{prof.full_name} ·</span> : null}
@@ -346,13 +342,12 @@ export default function Calendar() {
         acc[curr.day_of_week].push(curr);
         return acc;
     }, {} as Record<number, Availability[]>);
-=======
+
     // The grid's slot granularity mirrors the selected professional's own consultation length
     // (set per-specialty by the pharmacist in Staff Management: 15 / 30 / 60 minutes).
     const gridStepMinutes = professionals.find(p => p.id.toString() === selectedProfessional)?.default_duration_minutes ?? 15;
     const morningSlots = buildTimeSlots(8, 14, gridStepMinutes);
     const afternoonSlots = buildTimeSlots(14, 20, gridStepMinutes);
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
 
     return (
         <div className="flex h-full flex-col bg-pharmacy-cream relative">
@@ -450,49 +445,9 @@ export default function Calendar() {
                                             <span className="text-xs font-semibold text-pharmacy-muted bg-pharmacy-cream-dark px-2 py-1 rounded">{appointments.filter(a => a.room_number === 1 && a.status !== 'cancelled').length} active</span>
                                         </div>
                                         <ul className="space-y-3">
-<<<<<<< HEAD
                                             {appointments.filter(a => a.room_number === 1 && a.status !== 'cancelled').length === 0 
                                                 ? <p className="text-sm text-pharmacy-muted">No appointments booked in Room 1.</p> 
                                                 : appointments.filter(a => a.room_number === 1 && a.status !== 'cancelled').map(renderAppointmentCard)}
-=======
-                                            {appointments.filter(a => a.status !== 'cancelled').map((appt) => {
-                                                const apptTime = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
-                                                const uiDayIndex = apptTime.weekday === 7 ? 6 : apptTime.weekday - 1;
-
-                                                return (
-                                                    <li key={appt.id} className="text-sm bg-white p-4 rounded-xl border border-pharmacy-ink/10 shadow-sm flex flex-col gap-2">
-                                                        <div className="flex justify-between items-start gap-3">
-                                                            <div>
-                                                                <div className="flex items-baseline gap-2">
-                                                                    <span className="font-bold text-pharmacy-ink">{appt.client_name}</span>
-                                                                    <span className="text-xs font-mono text-pharmacy-muted">{formatDisplayPhone(appt.client_phone)}</span>
-                                                                </div>
-                                                                <div className="text-xs text-pharmacy-muted mt-0.5">
-                                                                    {DAYS_OF_WEEK[uiDayIndex]} · {apptTime.toFormat('HH:mm')}
-                                                                </div>
-                                                            </div>
-                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-pharmacy-ink bg-pharmacy-cream-dark border border-pharmacy-ink/10 px-2.5 py-1.5 rounded-md shrink-0">Room {appt.room_number}</span>
-                                                        </div>
-                                                        <div className="flex gap-4 mt-2 pt-3 border-t border-dashed border-pharmacy-ink/10">
-                                                            <button
-                                                                onClick={() => handleReschedule(appt)}
-                                                                disabled={actionLoadingId === appt.id}
-                                                                className="text-xs font-bold text-pharmacy-gold-dark hover:text-pharmacy-gold transition-colors disabled:opacity-50 uppercase tracking-wide"
-                                                            >
-                                                                Reschedule
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleCancelAppointment(appt.id)}
-                                                                disabled={actionLoadingId === appt.id}
-                                                                className="text-xs font-bold text-red-700/80 hover:text-red-700 transition-colors disabled:opacity-50 uppercase tracking-wide"
-                                                            >
-                                                                {actionLoadingId === appt.id ? '...' : 'Cancel'}
-                                                            </button>
-                                                        </div>
-                                                    </li>
-                                                );
-                                            })}
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
                                         </ul>
                                     </div>
                                     <div className="flex-1">
@@ -577,7 +532,6 @@ export default function Calendar() {
                                     </select>
                                 </div>
 
-<<<<<<< HEAD
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
                                     {selectedProfessional === 'ALL' ? (
                                         [
@@ -612,43 +566,8 @@ export default function Calendar() {
                                                                     cellContent = (
                                                                         <div className="flex flex-col items-start justify-center w-full px-2 leading-tight">
                                                                             <span className="font-bold text-[11px] text-emerald-900 truncate w-full">{details.appointment!.client_name}</span>
-                                                                            <span className="font-mono text-[10px] text-emerald-700/80">{details.appointment!.client_phone}</span>
-                                                                            {prof && <span className="font-bold text-[9px] uppercase tracking-wider text-pharmacy-gold-dark mt-0.5">{prof.full_name}</span>}
-=======
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    {[
-                                        { label: 'Morning', slots: morningSlots },
-                                        { label: 'Afternoon', slots: afternoonSlots },
-                                    ].map(({ label, slots }) => {
-                                        const currentDate = currentWeekStart.plus({ days: gridSelectedDay });
-                                        
-                                        return (
-                                            <div key={label} className="overflow-x-auto rounded-lg border border-pharmacy-ink/10 bg-white shadow-sm">
-                                                <table className="w-full text-sm text-left border-collapse">
-                                                    <thead className="bg-pharmacy-cream-dark text-pharmacy-ink">
-                                                        <tr>
-                                                            <th className="border-b border-r border-pharmacy-ink/10 px-4 py-3 font-semibold text-center w-24">Time</th>
-                                                            <th className="border-b border-pharmacy-ink/10 px-4 py-3 font-semibold text-center">
-                                                                {DAYS_OF_WEEK[gridSelectedDay]} - {label}
-                                                                <span className="ml-2 font-normal text-pharmacy-muted">({currentDate.toFormat('dd/MM/yyyy')})</span>
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {slots.map(({ hour, minute }) => {
-                                                            const details = getSlotDetails(gridSelectedDay, hour, minute);
-                                                            
-                                                            let cellClass = '';
-                                                            let cellContent: React.ReactNode = null;
-
-                                                            if (details.status === 'Booked') {
-                                                                cellClass = 'bg-emerald-50 border-emerald-200 text-emerald-800';
-                                                                cellContent = (
-                                                                    <div className="flex items-center justify-between w-full px-1">
-                                                                        <div className="flex items-baseline gap-1.5 truncate">
-                                                                            <span className="font-bold text-[11px] text-emerald-900 truncate">{details.appointment!.client_name}</span>
                                                                             <span className="font-mono text-[10px] text-emerald-700/80">{formatDisplayPhone(details.appointment!.client_phone)}</span>
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
+                                                                            {prof && <span className="font-bold text-[9px] uppercase tracking-wider text-pharmacy-gold-dark mt-0.5">{prof.full_name}</span>}
                                                                         </div>
                                                                     );
                                                                     interactionProps = { className: `border-b px-2 py-1 transition-colors text-xs ${cellClass}` };
@@ -690,8 +609,8 @@ export default function Calendar() {
                                         })
                                     ) : (
                                         [
-                                            { label: 'Morning', slots: MORNING_SLOTS },
-                                            { label: 'Afternoon', slots: AFTERNOON_SLOTS },
+                                            { label: 'Morning', slots: morningSlots },
+                                            { label: 'Afternoon', slots: afternoonSlots },
                                         ].map(({ label, slots }) => {
                                             const currentDate = currentWeekStart.plus({ days: gridSelectedDay });
                                             
@@ -703,6 +622,7 @@ export default function Calendar() {
                                                                 <th className="border-b border-r border-pharmacy-ink/10 px-4 py-3 font-semibold text-center w-24">Time</th>
                                                                 <th className="border-b border-pharmacy-ink/10 px-4 py-3 font-semibold text-center">
                                                                     {DAYS_OF_WEEK[gridSelectedDay]} - {label}
+                                                                    <span className="ml-2 font-normal text-pharmacy-muted">({currentDate.toFormat('dd/MM/yyyy')})</span>
                                                                 </th>
                                                             </tr>
                                                         </thead>
@@ -721,7 +641,7 @@ export default function Calendar() {
                                                                         <div className="flex items-center justify-between w-full px-1">
                                                                             <div className="flex items-baseline gap-1.5 truncate">
                                                                                 <span className="font-bold text-[11px] text-emerald-900 truncate">{details.appointment!.client_name}</span>
-                                                                                <span className="font-mono text-[10px] text-emerald-700/80">{details.appointment!.client_phone}</span>
+                                                                                <span className="font-mono text-[10px] text-emerald-700/80">{formatDisplayPhone(details.appointment!.client_phone)}</span>
                                                                             </div>
                                                                             <span className="font-bold text-[9px] uppercase tracking-wider text-emerald-900 bg-white/60 px-1.5 py-0.5 rounded shrink-0">Rm {details.appointment!.room_number}</span>
                                                                         </div>

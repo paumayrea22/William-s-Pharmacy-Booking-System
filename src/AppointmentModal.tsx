@@ -61,11 +61,8 @@ export default function AppointmentModal({
     const [modalProfessionalId, setModalProfessionalId] = useState(selectedProfessionalId);
     const [clientName, setClientName] = useState('');
     const [clientPhone, setClientPhone] = useState('');
-<<<<<<< HEAD
     const [appointmentNote, setAppointmentNote] = useState('');
-=======
     const [countryIso2, setCountryIso2] = useState(DEFAULT_COUNTRY_ISO2);
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
     const [roomNumber, setRoomNumber] = useState('1');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
@@ -91,22 +88,15 @@ export default function AppointmentModal({
 
         if (appointmentToEdit) {
             setModalProfessionalId(appointmentToEdit.professional_id.toString());
-<<<<<<< HEAD
-            setClientPhone(appointmentToEdit.client_phone);
-=======
-            setClientName(appointmentToEdit.client_name);
-
-            // Legacy records were stored as raw digits with an implicit Malta prefix
-            const { iso2, localNumber } = splitStoredPhone(appointmentToEdit.client_phone);
-            setCountryIso2(iso2);
-            setClientPhone(localNumber);
-
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
             setRoomNumber(appointmentToEdit.room_number.toString());
 
             const parsedData = extractNameAndNote(appointmentToEdit.client_name);
             setClientName(parsedData.name);
             setAppointmentNote(parsedData.note);
+
+            const { iso2, localNumber } = splitStoredPhone(appointmentToEdit.client_phone);
+            setCountryIso2(iso2);
+            setClientPhone(localNumber);
 
             const oldStart = DateTime.fromISO(appointmentToEdit.start_time_utc, { zone: 'Europe/Malta' });
             const oldEnd = DateTime.fromISO(appointmentToEdit.end_time_utc, { zone: 'Europe/Malta' });
@@ -136,8 +126,8 @@ export default function AppointmentModal({
             setCurrentMonth(initialDate);
             setClientName('');
             setClientPhone('');
-<<<<<<< HEAD
             setAppointmentNote('');
+            setCountryIso2(DEFAULT_COUNTRY_ISO2);
             setRoomNumber(initialRoom || '1');
             setActivePanel('NONE');
         } else {
@@ -147,9 +137,7 @@ export default function AppointmentModal({
             setClientName('');
             setClientPhone('');
             setAppointmentNote('');
-=======
             setCountryIso2(DEFAULT_COUNTRY_ISO2);
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
             setRoomNumber('1');
             setTempTime([]);
         }
@@ -233,7 +221,7 @@ export default function AppointmentModal({
 
     const handlePhoneInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const onlyNumbers = e.target.value.replace(/\D/g, '');
-        if (onlyNumbers.length <= 9) setClientPhone(onlyNumbers);
+        if (onlyNumbers.length <= 15) setClientPhone(onlyNumbers);
     };
 
     const handleNoteInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,6 +294,8 @@ export default function AppointmentModal({
             ? `${clientName.trim()} (${appointmentNote.trim()})`
             : clientName.trim();
 
+        const selectedDialCode = findCountryByIso2(countryIso2).dialCode;
+
         let isRollbackNeeded = false;
 
         try {
@@ -319,21 +309,11 @@ export default function AppointmentModal({
                 isRollbackNeeded = true;
             }
 
-<<<<<<< HEAD
             const { error: rpcError } = await supabase.rpc('book_appointment_secure', {
                 p_professional_id: parseInt(modalProfessionalId),
                 p_room_number: parseInt(roomNumber),
                 p_client_name: finalClientName,
-                p_client_phone: clientPhone,
-=======
-            // Phase 2: Execute the secure RPC with the new booking data
-            const selectedDialCode = findCountryByIso2(countryIso2).dialCode;
-            const { error: rpcError } = await supabase.rpc('book_appointment_secure', {
-                p_professional_id: parseInt(modalProfessionalId),
-                p_room_number: parseInt(roomNumber),
-                p_client_name: clientName.trim(),
                 p_client_phone: `${selectedDialCode} ${clientPhone}`,
->>>>>>> 1d447245f5f109b877d2ceaf438a446b0d9ccf2a
                 p_start_time_utc: startDateTime.toUTC().toISO(),
                 p_end_time_utc: endDateTime.toUTC().toISO(),
                 p_staff_username: staffUsername
@@ -380,7 +360,6 @@ export default function AppointmentModal({
             const endTime = DateTime.fromISO(`${selectedDateString}T${avail.end_time}`, { zone: 'Europe/Malta' });
             while (currentSlot < endTime) {
                 totalSlots++;
-                const timeString = currentSlot.toFormat('HH:mm');
                 const isBooked = monthAppointments.some(appt => {
                     const apptStart = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
                     const apptEnd = DateTime.fromISO(appt.end_time_utc, { zone: 'Europe/Malta' });
