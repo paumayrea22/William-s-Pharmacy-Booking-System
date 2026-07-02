@@ -420,18 +420,23 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                         <div>
                             <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Mobile Number</label>
                             <div className="flex shadow-sm rounded-lg overflow-hidden border border-pharmacy-ink/20 focus-within:border-pharmacy-gold focus-within:ring-2 focus-within:ring-pharmacy-gold/20 bg-white">
-                                <select
-                                    value={countryIso2}
-                                    onChange={(e) => setCountryIso2(e.target.value)}
-                                    aria-label="Country dial code"
-                                    className="max-w-[7.5rem] shrink-0 bg-pharmacy-cream-dark px-2 text-sm font-medium text-pharmacy-muted border-r border-pharmacy-ink/20 focus:outline-none"
-                                >
-                                    {COUNTRY_DIAL_CODES.map((country) => (
-                                        <option key={country.iso2} value={country.iso2}>
-                                            {getFlagEmoji(country.iso2)} {country.name} ({country.dialCode})
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative shrink-0 w-24 border-r border-pharmacy-ink/20">
+                                    <select
+                                        value={countryIso2}
+                                        onChange={(e) => setCountryIso2(e.target.value)}
+                                        aria-label="Country dial code"
+                                        className="w-full h-full appearance-none bg-pharmacy-cream-dark pl-2 pr-5 py-2 text-sm font-medium text-pharmacy-muted focus:outline-none truncate"
+                                    >
+                                        {COUNTRY_DIAL_CODES.map((country) => (
+                                            <option key={country.iso2} value={country.iso2}>
+                                                {getFlagEmoji(country.iso2)} {country.name} ({country.dialCode})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-pharmacy-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </div>
                                 <input
                                     type="text"
                                     value={clientPhone}
