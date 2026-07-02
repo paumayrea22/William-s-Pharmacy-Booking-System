@@ -23,8 +23,8 @@ interface Availability {
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function StaffManagement() {
-    const { role, username } = useAuth(); // Sealed role read from app_metadata, never user_metadata
-    const staffUsername = username ?? 'System';
+    // Sealed role read from app_metadata, never user_metadata
+    const { role } = useAuth();
 
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [selectedProfessional, setSelectedProfessional] = useState<string>('');
@@ -42,10 +42,6 @@ export default function StaffManagement() {
 
     const [errorMessage, setErrorMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-
-    // States for Malta public holiday overrides
-    const [openHolidayOverrides, setOpenHolidayOverrides] = useState<Set<string>>(new Set());
-    const [holidayActionLoading, setHolidayActionLoading] = useState<string | null>(null);
 
     // Retrieves the complete list of clinic specialists
     const fetchProfessionals = async () => {
@@ -89,20 +85,8 @@ export default function StaffManagement() {
         }
     };
 
-    // Retrieves the dates the pharmacy explicitly opted to open despite being a Malta public holiday
-    const fetchHolidayOverrides = async () => {
-        try {
-            const { data, error } = await supabase.from('holiday_overrides').select('holiday_date');
-            if (error) throw new Error(error.message);
-            setOpenHolidayOverrides(new Set((data || []).map(row => row.holiday_date)));
-        } catch (error) {
-            setErrorMessage('Infrastructure error loading holiday overrides: ' + getErrorMessage(error));
-        }
-    };
-
     useEffect(() => {
         fetchProfessionals();
-        fetchHolidayOverrides();
     }, []);
 
     useEffect(() => {
@@ -197,28 +181,6 @@ export default function StaffManagement() {
             setErrorMessage('Error purging schedule: ' + getErrorMessage(error));
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    // Toggles a Malta public holiday between blocked (default) and open as a normal working day
-    const toggleHolidayOverride = async (holidayDate: string, isCurrentlyOpen: boolean) => {
-        setHolidayActionLoading(holidayDate);
-        try {
-            if (isCurrentlyOpen) {
-                const { error } = await supabase.from('holiday_overrides').delete().eq('holiday_date', holidayDate);
-                if (error) throw new Error(error.message);
-            } else {
-                const { error } = await supabase.from('holiday_overrides').insert({
-                    holiday_date: holidayDate,
-                    created_by_username: staffUsername
-                });
-                if (error) throw new Error(error.message);
-            }
-            await fetchHolidayOverrides();
-        } catch (error) {
-            setErrorMessage('Error updating holiday override: ' + getErrorMessage(error));
-        } finally {
-            setHolidayActionLoading(null);
         }
     };
 
@@ -367,16 +329,13 @@ export default function StaffManagement() {
                 <div className="border-b pb-2 border-pharmacy-cream-dark">
                     <h2 className="font-display text-lg text-pharmacy-ink">Malta Public Holidays</h2>
                     <p className="text-xs text-pharmacy-muted mt-0.5">
-                        Bookings are blocked on these dates by default. Mark a holiday as "Open" if the pharmacy will operate as usual that day.
-                        {role !== 'pharmacist' && ' Only pharmacists can toggle this setting.'}
+                        Bookings are strictly blocked on these dates. The pharmacy permanently remains closed on Malta public holidays and Sundays.
                     </p>
                 </div>
 
                 <div className="max-h-72 overflow-y-auto border border-pharmacy-ink/10 rounded-lg custom-scrollbar pr-1">
                     <ul className="divide-y divide-pharmacy-cream-dark">
                         {upcomingHolidays.map(holiday => {
-                            const isOpen = openHolidayOverrides.has(holiday.date);
-                            const isActionLoading = holidayActionLoading === holiday.date;
                             return (
                                 <li key={holiday.date} className="p-3 text-xs flex justify-between items-center hover:bg-pharmacy-cream">
                                     <div>
@@ -384,19 +343,10 @@ export default function StaffManagement() {
                                             {DateTime.fromISO(holiday.date).toFormat('dd/MM/yyyy')}
                                         </span>
                                         <span className="text-pharmacy-muted">{holiday.name}</span>
-                                        <span className={`ml-2 px-2 py-0.5 rounded-full font-bold ${isOpen ? 'bg-pharmacy-green/10 text-pharmacy-green' : 'bg-pharmacy-gold/15 text-pharmacy-gold-dark'}`}>
-                                            {isOpen ? 'Open' : 'Holiday (Blocked)'}
+                                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold bg-pharmacy-gold/15 text-pharmacy-gold-dark">
+                                            Holiday (Closed)
                                         </span>
                                     </div>
-                                    {role === 'pharmacist' && (
-                                        <button
-                                            onClick={() => toggleHolidayOverride(holiday.date, isOpen)}
-                                            disabled={isActionLoading}
-                                            className={`font-bold transition disabled:opacity-50 ${isOpen ? 'text-pharmacy-gold-dark hover:text-pharmacy-gold' : 'text-pharmacy-green hover:text-pharmacy-green-light'}`}
-                                        >
-                                            {isActionLoading ? '...' : (isOpen ? 'Revert to Holiday' : 'Mark as Open')}
-                                        </button>
-                                    )}
                                 </li>
                             );
                         })}

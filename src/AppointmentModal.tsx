@@ -41,7 +41,8 @@ interface AppointmentModalProps {
 }
 
 export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedProfessionalId, professionals, appointmentToEdit }: AppointmentModalProps) {
-    const { role, username } = useAuth(); // Sealed role read from app_metadata, never user_metadata
+    // Sealed role read from app_metadata, never user_metadata
+    const { role, username } = useAuth();
     const staffUsername = username ?? 'System';
 
     const [modalProfessionalId, setModalProfessionalId] = useState(selectedProfessionalId);
@@ -60,7 +61,6 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
     const [monthAvailabilities, setMonthAvailabilities] = useState<Availability[]>([]);
     const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
     const [availableSlots, setAvailableSlots] = useState<{ time: string; isBooked: boolean }[]>([]);
-    const [openHolidayOverrides, setOpenHolidayOverrides] = useState<Set<string>>(new Set());
     
     const [currentMonth, setCurrentMonth] = useState<DateTime>(DateTime.local({ zone: 'Europe/Malta' }));
 
@@ -101,19 +101,14 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
             const matchingProf = professionals.find(p => p.full_name.includes(doctorName));
             if (matchingProf) setModalProfessionalId(matchingProf.id.toString());
         }
-
-        const fetchHolidayOverrides = async () => {
-            const { data } = await supabase.from('holiday_overrides').select('holiday_date');
-            setOpenHolidayOverrides(new Set((data || []).map(row => row.holiday_date)));
-        };
-        fetchHolidayOverrides();
     }, [isOpen, selectedProfessionalId, professionals, appointmentToEdit, role, username]);
 
-    // A day is blocked as a Malta holiday unless the staff explicitly marked it as open
+    // Strictly blocks Malta holidays and Sundays as per business logic invariants
     const isHolidayBlocked = (dateObj: DateTime): boolean => {
+        if (dateObj.weekday === 7) return true; // 7 represents Sunday in Luxon
         const dateISO = dateObj.toISODate();
         if (!dateISO) return false;
-        return getMaltaHolidayName(dateISO) !== null && !openHolidayOverrides.has(dateISO);
+        return getMaltaHolidayName(dateISO) !== null;
     };
 
     const getHolidayName = (dateObj: DateTime): string | null => {
