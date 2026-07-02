@@ -111,16 +111,16 @@ export default function StressTest() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto flex flex-col gap-6">
-            <div className="border-b border-gray-200 pb-4">
-                <h1 className="text-2xl font-black text-gray-800">Concurrency Stress Test</h1>
-                <p className="text-sm text-gray-500 mt-1">
+            <div className="border-b border-pharmacy-ink/10 pb-4">
+                <h1 className="font-display text-2xl text-pharmacy-ink">Concurrency Stress Test</h1>
+                <p className="text-sm text-pharmacy-muted mt-1">
                     Validates the PL/pgSQL pessimistic locking (SELECT FOR UPDATE) preventing double-booking room collisions.
                 </p>
             </div>
 
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
-                <p className="text-sm text-slate-700 font-medium">
-                    This test will attempt to fire 3 identical appointment insertions at the exact same millisecond. 
+            <div className="bg-pharmacy-cream-dark p-6 rounded-xl border border-pharmacy-ink/10 shadow-sm flex flex-col gap-4">
+                <p className="text-sm text-pharmacy-ink/80 font-medium">
+                    This test will attempt to fire 3 identical appointment insertions at the exact same millisecond.
                     If the database architecture is solid, only 1 thread will succeed, and 2 will be blocked by the RPC exception raiser.
                 </p>
 
@@ -135,14 +135,14 @@ export default function StressTest() {
 
             {testResults.length > 0 && (
                 <div className="flex flex-col gap-3 mt-4">
-                    <h3 className="font-bold text-gray-800 text-lg">Transaction Results:</h3>
+                    <h3 className="font-display text-lg text-pharmacy-ink">Transaction Results:</h3>
                     {testResults.map((res) => (
-                        <div 
-                            key={res.threadId} 
+                        <div
+                            key={res.threadId}
                             className={`p-4 rounded-lg border font-mono text-sm shadow-sm ${
-                                res.status === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
-                                res.status === 'failed' ? 'bg-red-50 border-red-200 text-red-800' : 
-                                'bg-gray-50 border-gray-200 text-gray-500 animate-pulse'
+                                res.status === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                                res.status === 'failed' ? 'bg-red-50 border-red-200 text-red-800' :
+                                'bg-pharmacy-cream-dark border-pharmacy-ink/10 text-pharmacy-muted animate-pulse'
                             }`}
                         >
                             <span className="font-bold mr-2">[THREAD 0{res.threadId}]</span>

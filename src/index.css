@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Warm pharmacy design system: cream surfaces, deep navy structure, gold accents (matched to the official logo) */
+@theme {
+    --color-pharmacy-cream: #F7F1E4;
+    --color-pharmacy-cream-dark: #EFE7D4;
+    --color-pharmacy-green: #212A52;
+    --color-pharmacy-green-light: #474E6F;
+    --color-pharmacy-green-lighter: #6C728D;
+    --color-pharmacy-gold: #CC9933;
+    --color-pharmacy-gold-dark: #AD822B;
+    --color-pharmacy-ink: #22392E;
+    --color-pharmacy-muted: #8A8171;
+    --font-display: "Playfair Display", ui-serif, serif;
+}
+
 /* Visible, styled scrollbar for scrollable list panels */
 .custom-scrollbar {
     scrollbar-width: auto;

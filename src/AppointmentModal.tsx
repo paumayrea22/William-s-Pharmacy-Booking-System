@@ -258,14 +258,14 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
     const getDayColorClass = (dateObj: DateTime, isSelected: boolean) => {
         const today = DateTime.local({ zone: 'Europe/Malta' }).startOf('day');
-        
-        if (isSelected) return 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300';
-        if (dateObj < today) return 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60';
+
+        if (isSelected) return 'bg-pharmacy-gold text-pharmacy-green shadow-md ring-2 ring-pharmacy-gold/40 font-semibold';
+        if (dateObj < today) return 'bg-pharmacy-cream-dark text-pharmacy-muted cursor-not-allowed opacity-60';
         if (isHolidayBlocked(dateObj)) return 'bg-purple-50 text-purple-500 border border-purple-200 cursor-not-allowed opacity-80 line-through';
 
         const sqlDayOfWeek = dateObj.weekday === 7 ? 0 : dateObj.weekday;
         const dayAvails = monthAvailabilities.filter(a => a.day_of_week === sqlDayOfWeek);
-        if (dayAvails.length === 0) return 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60';
+        if (dayAvails.length === 0) return 'bg-pharmacy-cream-dark text-pharmacy-muted cursor-not-allowed opacity-60';
 
         let totalSlots = 0;
         let bookedSlots = 0;
@@ -291,10 +291,10 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
             }
         });
 
-        if (totalSlots === 0) return 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60';
+        if (totalSlots === 0) return 'bg-pharmacy-cream-dark text-pharmacy-muted cursor-not-allowed opacity-60';
         if (bookedSlots >= totalSlots) return 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-semibold';
-        
-        return 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:shadow-sm font-semibold transition-all';
+
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:shadow-sm font-semibold transition-all';
     };
 
     const renderCalendarInner = () => {
@@ -331,22 +331,22 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
         return (
             <>
                 <div className="flex items-center justify-between mb-4 px-2 shrink-0">
-                    <button type="button" onClick={() => setCurrentMonth(currentMonth.minus({ months: 1 }))} className="p-1 hover:bg-gray-100 rounded text-gray-600">←</button>
-                    <span className="font-semibold text-gray-800">{currentMonth.toFormat('MMMM yyyy')}</span>
-                    <button type="button" onClick={() => setCurrentMonth(currentMonth.plus({ months: 1 }))} className="p-1 hover:bg-gray-100 rounded text-gray-600">→</button>
+                    <button type="button" onClick={() => setCurrentMonth(currentMonth.minus({ months: 1 }))} className="p-1 hover:bg-pharmacy-cream rounded text-pharmacy-ink">←</button>
+                    <span className="font-display text-lg text-pharmacy-ink">{currentMonth.toFormat('MMMM yyyy')}</span>
+                    <button type="button" onClick={() => setCurrentMonth(currentMonth.plus({ months: 1 }))} className="p-1 hover:bg-pharmacy-cream rounded text-pharmacy-ink">→</button>
                 </div>
-                
-                <div className="grid grid-cols-7 gap-1 text-center mb-2 text-xs font-bold text-gray-400 shrink-0">
+
+                <div className="grid grid-cols-7 gap-1 text-center mb-2 text-xs font-bold text-pharmacy-muted shrink-0">
                     <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
                 </div>
-                
+
                 <div className="grid grid-cols-7 gap-1 shrink-0">
                     {days}
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-4 mt-6 mb-2 text-xs font-medium text-gray-500 shrink-0">
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-200"></span> Unavailable</div>
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span> Available</div>
+                <div className="flex flex-wrap justify-center gap-4 mt-6 mb-2 text-xs font-medium text-pharmacy-muted shrink-0">
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-pharmacy-cream-dark"></span> Unavailable</div>
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-100 border border-emerald-300"></span> Available</div>
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-100 border border-red-300"></span> Booked</div>
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-50 border border-purple-200"></span> Holiday</div>
                 </div>
@@ -355,14 +355,14 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-            <div className="flex w-full max-w-4xl h-fit max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
-                
-                <div className="w-1/2 p-6 border-r border-gray-100 bg-gray-50/30 flex flex-col">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-4 shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-pharmacy-green/50 p-4 backdrop-blur-sm">
+            <div className="flex w-full max-w-4xl h-fit max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden border border-pharmacy-ink/10">
+
+                <div className="w-1/2 p-6 border-r border-pharmacy-cream-dark bg-pharmacy-cream/40 flex flex-col">
+                    <h2 className="font-display text-2xl text-pharmacy-ink mb-4 shrink-0">
                         {appointmentToEdit ? 'Reschedule Appointment' : 'Book Appointment'}
                     </h2>
-                    
+
                     {errorMessage && (
                         <div className="mb-4 rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-600 font-medium shrink-0">
                             {errorMessage}
@@ -371,9 +371,9 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
                     <form onSubmit={handleFormSubmit} className="space-y-4 flex-1 flex flex-col">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Attending Professional</label>
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Attending Professional</label>
                             {role === 'doctor' ? (
-                                <div className="w-full rounded-lg border border-gray-300 bg-gray-100 p-2 text-gray-500 font-medium">
+                                <div className="w-full rounded-lg border border-pharmacy-ink/15 bg-pharmacy-cream-dark p-2 text-pharmacy-muted font-medium">
                                     {(() => {
                                         const own = professionals.find(p => p.id.toString() === modalProfessionalId);
                                         return own ? `${own.full_name} (${own.specialty})` : 'Unknown professional';
@@ -383,7 +383,7 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                                 <select
                                     value={modalProfessionalId}
                                     onChange={(e) => setModalProfessionalId(e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 p-2 text-gray-800 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-pharmacy-ink/20 p-2 text-pharmacy-ink shadow-sm focus:border-pharmacy-gold focus:ring-2 focus:ring-pharmacy-gold/20"
                                 >
                                     {professionals.map(prof => (
                                         <option key={prof.id} value={prof.id}>{prof.full_name} ({prof.specialty})</option>
@@ -393,23 +393,23 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Patient Full Name</label>
-                            <input 
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Patient Full Name</label>
+                            <input
                                 type="text"
                                 value={clientName}
                                 onChange={(e) => setClientName(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                className="w-full rounded-lg border border-pharmacy-ink/20 p-2 shadow-sm focus:border-pharmacy-gold focus:ring-2 focus:ring-pharmacy-gold/20"
                                 placeholder="John Doe"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Mobile Number</label>
-                            <div className="flex shadow-sm rounded-lg overflow-hidden border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 bg-white">
-                                <span className="flex items-center justify-center bg-gray-100 px-3 text-sm font-medium text-gray-600 border-r border-gray-300">
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Mobile Number</label>
+                            <div className="flex shadow-sm rounded-lg overflow-hidden border border-pharmacy-ink/20 focus-within:border-pharmacy-gold focus-within:ring-2 focus-within:ring-pharmacy-gold/20 bg-white">
+                                <span className="flex items-center justify-center bg-pharmacy-cream-dark px-3 text-sm font-medium text-pharmacy-muted border-r border-pharmacy-ink/20">
                                     +356
                                 </span>
-                                <input 
+                                <input
                                     type="text"
                                     value={clientPhone}
                                     onChange={handlePhoneInput}
@@ -421,47 +421,47 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
-                                <button 
+                                <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Date</label>
+                                <button
                                     type="button"
                                     onClick={() => setActivePanel('DATE')}
-                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors ${activePanel === 'DATE' ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors ${activePanel === 'DATE' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
                                 >
-                                    {confirmedDate ? confirmedDate.toFormat('dd/MM/yyyy') : <span className="text-gray-400">Select day...</span>}
+                                    {confirmedDate ? confirmedDate.toFormat('dd/MM/yyyy') : <span className="text-pharmacy-muted">Select day...</span>}
                                 </button>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Start Time</label>
-                                <button 
+                                <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Start Time</label>
+                                <button
                                     type="button"
                                     disabled={!confirmedDate}
                                     onClick={() => setActivePanel('TIME')}
-                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed ${activePanel === 'TIME' ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors disabled:bg-pharmacy-cream-dark disabled:text-pharmacy-muted disabled:cursor-not-allowed ${activePanel === 'TIME' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
                                 >
-                                    {confirmedTime ? confirmedTime : <span className={!confirmedDate ? 'text-gray-400' : 'text-gray-500'}>Select time...</span>}
+                                    {confirmedTime ? confirmedTime : <span className={!confirmedDate ? 'text-pharmacy-muted' : 'text-pharmacy-muted'}>Select time...</span>}
                                 </button>
                             </div>
                         </div>
 
                         <div className="pt-1">
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Assigned Clinic Room</label>
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-2">Assigned Clinic Room</label>
                             <div className="flex items-center gap-6">
                                 <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="room" value="1" checked={roomNumber === '1'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"/>
-                                    <span className="text-sm text-gray-700 font-medium">Room 1</span>
+                                    <input type="radio" name="room" value="1" checked={roomNumber === '1'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-pharmacy-gold-dark border-pharmacy-ink/30 focus:ring-pharmacy-gold"/>
+                                    <span className="text-sm text-pharmacy-ink font-medium">Room 1</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="room" value="2" checked={roomNumber === '2'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"/>
-                                    <span className="text-sm text-gray-700 font-medium">Room 2</span>
+                                    <input type="radio" name="room" value="2" checked={roomNumber === '2'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-pharmacy-gold-dark border-pharmacy-ink/30 focus:ring-pharmacy-gold"/>
+                                    <span className="text-sm text-pharmacy-ink font-medium">Room 2</span>
                                 </label>
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-4 border-t border-gray-200 flex justify-between items-center shrink-0">
-                            <button type="button" onClick={onClose} disabled={isSubmitting} className="text-sm font-semibold text-gray-500 hover:text-gray-800 transition">
+                        <div className="mt-auto pt-4 border-t border-pharmacy-cream-dark flex justify-between items-center shrink-0">
+                            <button type="button" onClick={onClose} disabled={isSubmitting} className="text-sm font-semibold text-pharmacy-muted hover:text-pharmacy-ink transition">
                                 Cancel & Close
                             </button>
-                            <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || !confirmedTime} className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none transition-all">
+                            <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || !confirmedTime} className="rounded-full bg-pharmacy-gold px-6 py-2.5 text-sm font-bold text-pharmacy-green shadow-md hover:bg-pharmacy-gold-dark hover:text-white disabled:bg-gray-300 disabled:text-white disabled:shadow-none transition-all">
                                 {isSubmitting ? 'Saving...' : (appointmentToEdit ? 'Confirm Reschedule' : 'Confirm Appointment')}
                             </button>
                         </div>
@@ -470,8 +470,8 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
                 <div className="w-1/2 p-6 bg-white flex flex-col">
                     {activePanel === 'NONE' && (
-                        <div className="m-auto flex flex-col items-center justify-center text-gray-400">
-                            <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="m-auto flex flex-col items-center justify-center text-pharmacy-muted">
+                            <svg className="w-16 h-16 mb-4 text-pharmacy-cream-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                             </svg>
                             <p className="text-center font-medium">Click on Date or Time<br/>to open the configuration panel.</p>
@@ -480,14 +480,14 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
 
                     {activePanel === 'DATE' && (
                         <>
-                            <h3 className="text-lg font-bold text-gray-800 mb-6 shrink-0">Select Appointment Date</h3>
+                            <h3 className="font-display text-lg text-pharmacy-ink mb-6 shrink-0">Select Appointment Date</h3>
                             {renderCalendarInner()}
-                            <div className="mt-auto pt-4 border-t border-gray-200 flex justify-end shrink-0">
+                            <div className="mt-auto pt-4 border-t border-pharmacy-cream-dark flex justify-end shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => { if (tempDate) { setConfirmedDate(tempDate); setConfirmedTime(null); setActivePanel('NONE'); } }}
                                     disabled={!tempDate}
-                                    className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold text-sm disabled:opacity-50 disabled:shadow-none shadow-md hover:bg-blue-700 transition-all"
+                                    className="bg-pharmacy-gold text-pharmacy-green px-6 py-2.5 rounded-full font-bold text-sm disabled:opacity-50 disabled:shadow-none shadow-md hover:bg-pharmacy-gold-dark hover:text-white transition-all"
                                 >
                                     Save Date
                                 </button>
@@ -498,12 +498,12 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                     {activePanel === 'TIME' && (
                         <>
                             <div className="shrink-0">
-                                <h3 className="text-lg font-bold text-gray-800 mb-1">Select Time Slot</h3>
-                                <p className="text-sm text-gray-500 mb-4 pb-4 border-b border-gray-100">Availability for {confirmedDate?.toFormat('dd/MM/yyyy')}</p>
+                                <h3 className="font-display text-lg text-pharmacy-ink mb-1">Select Time Slot</h3>
+                                <p className="text-sm text-pharmacy-muted mb-4 pb-4 border-b border-pharmacy-cream-dark">Availability for {confirmedDate?.toFormat('dd/MM/yyyy')}</p>
                             </div>
-                            
+
                             {availableSlots.length === 0 ? (
-                                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300 p-6 text-center">
+                                <div className="flex-1 flex flex-col items-center justify-center text-pharmacy-muted bg-pharmacy-cream rounded-lg border border-dashed border-pharmacy-ink/15 p-6 text-center">
                                     No available working hours for this professional today.
                                 </div>
                             ) : (
@@ -516,11 +516,11 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                                                 disabled={slot.isBooked}
                                                 onClick={() => setTempTime(slot.time)}
                                                 className={`p-3 rounded-lg border-2 text-sm font-bold transition-all ${
-                                                    slot.isBooked 
-                                                        ? 'bg-red-50 border-red-100 text-red-400 cursor-not-allowed line-through' 
+                                                    slot.isBooked
+                                                        ? 'bg-red-50 border-red-100 text-red-400 cursor-not-allowed line-through'
                                                         : tempTime === slot.time
-                                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md transform scale-105'
-                                                            : 'bg-white border-blue-100 text-blue-700 hover:border-blue-500 hover:text-blue-800 hover:bg-blue-50'
+                                                            ? 'bg-pharmacy-gold border-pharmacy-gold text-pharmacy-green shadow-md transform scale-105'
+                                                            : 'bg-white border-emerald-100 text-emerald-700 hover:border-pharmacy-gold hover:text-pharmacy-gold-dark hover:bg-pharmacy-gold/10'
                                                 }`}
                                             >
                                                 {slot.time}
@@ -530,12 +530,12 @@ export default function AppointmentModal({ isOpen, onClose, onSuccess, selectedP
                                 </div>
                             )}
 
-                            <div className="mt-auto pt-4 border-t border-gray-200 flex justify-end shrink-0">
+                            <div className="mt-auto pt-4 border-t border-pharmacy-cream-dark flex justify-end shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => { if (tempTime) { setConfirmedTime(tempTime); setActivePanel('NONE'); } }}
                                     disabled={!tempTime}
-                                    className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold text-sm disabled:opacity-50 disabled:shadow-none shadow-md hover:bg-blue-700 transition-all"
+                                    className="bg-pharmacy-gold text-pharmacy-green px-6 py-2.5 rounded-full font-bold text-sm disabled:opacity-50 disabled:shadow-none shadow-md hover:bg-pharmacy-gold-dark hover:text-white transition-all"
                                 >
                                     Save Time
                                 </button>

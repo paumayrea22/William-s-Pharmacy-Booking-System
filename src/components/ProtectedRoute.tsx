@@ -8,8 +8,8 @@ export const ProtectedRoute = () => {
   // Display a fallback UI while Supabase validates the JWT token in the background
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-medium">Authenticating workspace...</p>
+      <div className="flex h-screen w-full items-center justify-center bg-pharmacy-cream">
+        <p className="text-pharmacy-muted font-medium">Authenticating workspace...</p>
       </div>
     );
   }
