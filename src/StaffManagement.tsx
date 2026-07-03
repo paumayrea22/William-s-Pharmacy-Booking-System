@@ -130,19 +130,31 @@ export default function StaffManagement() {
     const updateProfessionalDuration = async (professionalId: number, newDurationMinutes: number) => {
         setErrorMessage('');
         setUpdatingDurationId(professionalId);
+
+        // Optimistic update so the select reflects the click immediately instead of silently reverting
+        setProfessionals(prev => prev.map(p => p.id === professionalId ? { ...p, default_duration_minutes: newDurationMinutes } : p));
+
         try {
-            const { error } = await supabase
+            // .select() forces Postgres to report which rows were actually touched, so a Row Level
+            // Security denial (0 rows matched, no thrown error) can be detected instead of silently ignored
+            const { data, error } = await supabase
                 .from('professionals')
                 .update({ default_duration_minutes: newDurationMinutes })
-                .eq('id', professionalId);
+                .eq('id', professionalId)
+                .select();
 
             if (error) {
                 throw new Error(error.message);
             }
 
+            if (!data || data.length === 0) {
+                throw new Error('Update blocked by database permissions: run supabase/07_professionals_update_policy.sql and confirm you are signed in as a pharmacist.');
+            }
+
             await fetchProfessionals();
         } catch (error) {
             setErrorMessage('Error updating consultation duration: ' + getErrorMessage(error));
+            await fetchProfessionals(); // Revert the optimistic change back to the real stored value
         } finally {
             setUpdatingDurationId(null);
         }
