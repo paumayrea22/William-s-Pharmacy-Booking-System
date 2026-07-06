@@ -56,6 +56,12 @@ interface Appointment {
     room_number: number;
 }
 
+interface Room {
+    id: number;
+    room_number: number;
+    label: string;
+}
+
 interface IncomingAlert {
     id: number;
     clientName: string;
@@ -117,6 +123,7 @@ export default function Calendar() {
 
     const [availabilities, setAvailabilities] = useState<Availability[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [isDataLoading, setIsDataLoading] = useState(false);
     const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
@@ -135,8 +142,13 @@ export default function Calendar() {
     const [prefilledDate, setPrefilledDate] = useState<DateTime | null>(null);
     const [prefilledTime, setPrefilledTime] = useState<string[]>([]);
     const [prefilledRoom, setPrefilledRoom] = useState<string>('');
-    
+
     const [refreshKey, setRefreshKey] = useState(0);
+
+    // Clinic-wide monthly overview (all professionals, all rooms), independent of the weekly filters above
+    const [monthSummaryDate, setMonthSummaryDate] = useState<DateTime>(() => DateTime.local({ zone: 'Europe/Malta' }).startOf('month'));
+    const [monthSummaryAppointments, setMonthSummaryAppointments] = useState<Appointment[]>([]);
+    const [isMonthSummaryLoading, setIsMonthSummaryLoading] = useState(false);
 
     useEffect(() => {
         document.addEventListener('click', unlockAudioEngine, { once: true });
@@ -198,7 +210,15 @@ export default function Calendar() {
     }, [role, username]);
 
     useEffect(() => {
-        if (!selectedProfessional) return;
+        const fetchRooms = async () => {
+            const { data, error } = await supabase.from('rooms').select('*').order('room_number', { ascending: true });
+            if (!error && data) setRooms(data);
+        };
+        fetchRooms();
+    }, []);
+
+    useEffect(() => {
+        if (!selectedProfessional || selectedProfessional === 'MONTH_SUMMARY') return;
 
         const fetchProfessionalData = async () => {
             setIsDataLoading(true);
@@ -225,6 +245,27 @@ export default function Calendar() {
         };
         fetchProfessionalData();
     }, [selectedProfessional, currentWeekStart, refreshKey]);
+
+    useEffect(() => {
+        if (selectedProfessional !== 'MONTH_SUMMARY') return;
+
+        const fetchMonthSummary = async () => {
+            setIsMonthSummaryLoading(true);
+            const startUtc = monthSummaryDate.startOf('month').toUTC().toISO();
+            const endUtc = monthSummaryDate.endOf('month').toUTC().toISO();
+
+            const { data, error } = await supabase
+                .from('appointments')
+                .select('*')
+                .gte('start_time_utc', startUtc)
+                .lte('start_time_utc', endUtc)
+                .order('start_time_utc', { ascending: true });
+
+            if (!error) setMonthSummaryAppointments(data || []);
+            setIsMonthSummaryLoading(false);
+        };
+        fetchMonthSummary();
+    }, [selectedProfessional, monthSummaryDate, refreshKey]);
 
     useEffect(() => {
         const realtimeChannel = supabase
@@ -406,6 +447,86 @@ export default function Calendar() {
     const morningSlots = buildTimeSlots(7, 14, gridStepMinutes); // Starts at 7:30 explicitly now
     const afternoonSlots = buildTimeSlots(14, 20, gridStepMinutes);
 
+    const MONTH_SUMMARY_STATUS_STYLES: Record<string, string> = {
+        confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        cancelled: 'bg-red-50 text-red-600 border-red-200',
+        completed: 'bg-pharmacy-cream-dark text-pharmacy-muted border-pharmacy-ink/10',
+        no_show: 'bg-orange-50 text-orange-600 border-orange-200',
+    };
+
+    const renderMonthSummaryEntry = (appt: Appointment) => {
+        const apptTime = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' });
+        const prof = professionals.find(p => p.id === appt.professional_id);
+        const parsed = extractNameAndNote(appt.client_name);
+
+        return (
+            <li key={appt.id} className={`text-sm bg-white p-4 rounded-xl border border-pharmacy-ink/10 shadow-sm flex flex-col gap-2 ${appt.status === 'cancelled' ? 'opacity-60' : ''}`}>
+                <div className="flex justify-between items-start gap-3">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-pharmacy-ink text-base">{parsed.name}</span>
+                            {parsed.note && <span className="text-[10px] font-bold uppercase tracking-wider text-pharmacy-gold-dark bg-pharmacy-gold/15 px-1.5 py-0.5 rounded">Note: {parsed.note}</span>}
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${MONTH_SUMMARY_STATUS_STYLES[appt.status] ?? ''}`}>{appt.status.replace('_', ' ')}</span>
+                        </div>
+                        <span className="text-xs font-mono text-pharmacy-muted">{formatDisplayPhone(appt.client_phone)}</span>
+                        <div className="text-xs text-pharmacy-muted mt-1">
+                            {apptTime.toFormat('HH:mm')} · {prof ? `${prof.full_name} (${prof.specialty})` : 'Unknown professional'}
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-pharmacy-ink bg-pharmacy-cream-dark border border-pharmacy-ink/10 px-2.5 py-1.5 rounded-md shrink-0">Room {appt.room_number}</span>
+                </div>
+                {appt.status === 'confirmed' && (
+                    <div className="flex gap-4 mt-2 pt-3 border-t border-dashed border-pharmacy-ink/10">
+                        <button
+                            onClick={() => handleReschedule(appt)}
+                            disabled={actionLoadingId === appt.id}
+                            className="text-xs font-bold text-pharmacy-gold-dark hover:text-pharmacy-gold transition-colors disabled:opacity-50 uppercase tracking-wide"
+                        >
+                            Reschedule
+                        </button>
+                        <button
+                            onClick={() => handleCancelAppointment(appt.id)}
+                            disabled={actionLoadingId === appt.id}
+                            className="text-xs font-bold text-red-700/80 hover:text-red-700 transition-colors disabled:opacity-50 uppercase tracking-wide"
+                        >
+                            {actionLoadingId === appt.id ? '...' : 'Cancel'}
+                        </button>
+                    </div>
+                )}
+            </li>
+        );
+    };
+
+    const groupedMonthSummary = monthSummaryAppointments.reduce((acc, appt) => {
+        const dateISO = DateTime.fromISO(appt.start_time_utc, { zone: 'Europe/Malta' }).toISODate()!;
+        if (!acc[dateISO]) acc[dateISO] = [];
+        acc[dateISO].push(appt);
+        return acc;
+    }, {} as Record<string, Appointment[]>);
+    const sortedMonthSummaryDates = Object.keys(groupedMonthSummary).sort();
+
+    const renderMonthSummary = () => (
+        <div className="flex flex-col gap-6 pb-8 overflow-y-auto">
+            {sortedMonthSummaryDates.length === 0 ? (
+                <p className="text-sm text-pharmacy-muted">No appointments booked this month.</p>
+            ) : sortedMonthSummaryDates.map(dateISO => {
+                const dateObj = DateTime.fromISO(dateISO, { zone: 'Europe/Malta' });
+                const dayAppts = groupedMonthSummary[dateISO];
+                return (
+                    <div key={dateISO}>
+                        <h3 className="font-display text-lg text-pharmacy-ink mb-3 border-b border-dotted border-pharmacy-ink/15 pb-2">
+                            {dateObj.toFormat('EEEE, dd MMMM yyyy')}
+                            <span className="ml-2 text-xs font-sans font-normal text-pharmacy-muted">{dayAppts.length} appointment{dayAppts.length !== 1 ? 's' : ''}</span>
+                        </h3>
+                        <ul className="space-y-3">
+                            {dayAppts.map(renderMonthSummaryEntry)}
+                        </ul>
+                    </div>
+                );
+            })}
+        </div>
+    );
+
     return (
         <div className="flex h-full flex-col bg-pharmacy-cream relative">
             {activeNotification && (
@@ -425,7 +546,9 @@ export default function Calendar() {
                 <div>
                     <p className="text-xs font-semibold tracking-[0.2em] text-pharmacy-gold-dark uppercase mb-1">Appointment Management</p>
                     <h1 className="font-display text-3xl text-pharmacy-ink">
-                        {currentWeekStart.hasSame(DateTime.local(), 'week') ? 'The week ahead' : `Week of ${currentWeekStart.toFormat('MMMM d')}`}
+                        {selectedProfessional === 'MONTH_SUMMARY'
+                            ? monthSummaryDate.toFormat('MMMM yyyy')
+                            : (currentWeekStart.hasSame(DateTime.local(), 'week') ? 'The week ahead' : `Week of ${currentWeekStart.toFormat('MMMM d')}`)}
                     </h1>
                 </div>
                 <div className="flex items-center gap-4">
@@ -440,10 +563,11 @@ export default function Calendar() {
                         <select
                             value={selectedProfessional}
                             onChange={(e) => setSelectedProfessional(e.target.value)}
-                            disabled={isStaffLoading || isDataLoading}
+                            disabled={isStaffLoading || isDataLoading || isMonthSummaryLoading}
                             className="rounded-full border border-pharmacy-ink/20 bg-white px-4 py-2 text-sm text-pharmacy-ink shadow-sm focus:border-pharmacy-gold focus:outline-none focus:ring-1 focus:ring-pharmacy-gold disabled:opacity-50 font-medium"
                         >
                             <option value="ALL">General (All Rooms & Doctors)</option>
+                            <option value="MONTH_SUMMARY">Monthly Summary (All Appointments)</option>
                             {isStaffLoading ? <option disabled>Loading staff...</option> : professionals.map((prof) => (
                                 <option key={prof.id} value={prof.id}>{prof.full_name} ({prof.specialty})</option>
                             ))}
@@ -454,16 +578,37 @@ export default function Calendar() {
             </header>
 
             <div className="flex-1 overflow-auto bg-pharmacy-cream p-6">
-                {isDataLoading ? (
+                {(selectedProfessional === 'MONTH_SUMMARY' ? isMonthSummaryLoading : isDataLoading) ? (
                     <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-pharmacy-ink/20 bg-white">
                         <p className="text-pharmacy-muted animate-pulse font-medium">Syncing Malta databases...</p>
+                    </div>
+                ) : selectedProfessional === 'MONTH_SUMMARY' ? (
+                    <div className="flex flex-col gap-6 h-full">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-pharmacy-cream-dark pb-3 gap-4 shrink-0">
+                            <div className="flex items-center gap-6">
+                                <h2 className="font-display text-xl text-pharmacy-ink">Monthly Appointment Summary</h2>
+                                <div className="flex items-center bg-white rounded-lg border border-pharmacy-ink/20 shadow-sm overflow-hidden h-8">
+                                    <button onClick={() => setMonthSummaryDate(prev => prev.minus({ months: 1 }))} className="px-3 hover:bg-pharmacy-cream transition text-pharmacy-ink text-xs font-bold h-full flex items-center gap-1">
+                                        <span>←</span> Prev Month
+                                    </button>
+                                    <button onClick={() => setMonthSummaryDate(DateTime.local({ zone: 'Europe/Malta' }).startOf('month'))} className="px-3 hover:bg-pharmacy-cream transition border-x border-pharmacy-ink/10 text-[10px] font-bold text-pharmacy-muted uppercase tracking-wider h-full">
+                                        This Month
+                                    </button>
+                                    <button onClick={() => setMonthSummaryDate(prev => prev.plus({ months: 1 }))} className="px-3 hover:bg-pharmacy-cream transition text-pharmacy-ink text-xs font-bold h-full flex items-center gap-1">
+                                        Next Month <span>→</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <span className="text-sm font-semibold text-pharmacy-ink">{monthSummaryAppointments.filter(a => a.status !== 'cancelled').length} active appointments</span>
+                        </div>
+                        {renderMonthSummary()}
                     </div>
                 ) : (
                     <div className="flex flex-col gap-6 h-full">
                         <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-pharmacy-cream-dark pb-3 gap-4 shrink-0">
                             <div className="flex items-center gap-6">
                                 <h2 className="font-display text-xl text-pharmacy-ink">{selectedProfessional === 'ALL' ? 'General Clinic Schedule' : 'Weekly availability'}</h2>
-                                
+
                                 <div className="flex items-center bg-white rounded-lg border border-pharmacy-ink/20 shadow-sm overflow-hidden h-8">
                                     <button onClick={() => setCurrentWeekStart(prev => prev.minus({ weeks: 1 }))} className="px-3 hover:bg-pharmacy-cream transition text-pharmacy-ink text-xs font-bold h-full flex items-center gap-1">
                                         <span>←</span> Prev Week
@@ -476,7 +621,7 @@ export default function Calendar() {
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-4 text-sm font-medium">
                                 <div className="flex items-center gap-2 mr-2">
                                     <label className="text-sm font-medium text-pharmacy-muted">Day:</label>
@@ -514,38 +659,24 @@ export default function Calendar() {
                         {viewMode === 'list' ? (
                             selectedProfessional === 'ALL' ? (
                                 <div className="flex flex-col md:flex-row gap-8 pb-8">
-                                    <div className="flex-1 md:border-r border-dashed border-pharmacy-ink/20 md:pr-8">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-display text-lg text-pharmacy-ink">Room 1 Appointments</h3>
-                                            <span className="text-xs font-semibold text-pharmacy-muted bg-pharmacy-cream-dark px-2 py-1 rounded">{activeFilteredAppts.filter(a => a.room_number === 1).length} active</span>
+                                    {rooms.map((room, idx) => (
+                                        <div key={room.id} className={`flex-1 ${idx < rooms.length - 1 ? 'md:border-r border-dashed border-pharmacy-ink/20 md:pr-8' : ''}`}>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="font-display text-lg text-pharmacy-ink">{room.label} Appointments</h3>
+                                                <span className="text-xs font-semibold text-pharmacy-muted bg-pharmacy-cream-dark px-2 py-1 rounded">{activeFilteredAppts.filter(a => a.room_number === room.room_number).length} active</span>
+                                            </div>
+                                            <ul className="space-y-3">
+                                                {uniqueTimesForGeneral.length === 0
+                                                    ? <p className="text-sm text-pharmacy-muted">No appointments booked in {room.label}.</p>
+                                                    : uniqueTimesForGeneral.map(timeUtc => {
+                                                        const appt = activeFilteredAppts.find(a => a.start_time_utc === timeUtc && a.room_number === room.room_number);
+                                                        if (appt) return renderAppointmentCard(appt);
+                                                        return renderEmptyPlaceholder(timeUtc, room.room_number);
+                                                    })
+                                                }
+                                            </ul>
                                         </div>
-                                        <ul className="space-y-3">
-                                            {uniqueTimesForGeneral.length === 0 
-                                                ? <p className="text-sm text-pharmacy-muted">No appointments booked in Room 1.</p> 
-                                                : uniqueTimesForGeneral.map(timeUtc => {
-                                                    const appt = activeFilteredAppts.find(a => a.start_time_utc === timeUtc && a.room_number === 1);
-                                                    if (appt) return renderAppointmentCard(appt);
-                                                    return renderEmptyPlaceholder(timeUtc, 1);
-                                                })
-                                            }
-                                        </ul>
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-display text-lg text-pharmacy-ink">Room 2 Appointments</h3>
-                                            <span className="text-xs font-semibold text-pharmacy-muted bg-pharmacy-cream-dark px-2 py-1 rounded">{activeFilteredAppts.filter(a => a.room_number === 2).length} active</span>
-                                        </div>
-                                        <ul className="space-y-3">
-                                            {uniqueTimesForGeneral.length === 0 
-                                                ? <p className="text-sm text-pharmacy-muted">No appointments booked in Room 2.</p> 
-                                                : uniqueTimesForGeneral.map(timeUtc => {
-                                                    const appt = activeFilteredAppts.find(a => a.start_time_utc === timeUtc && a.room_number === 2);
-                                                    if (appt) return renderAppointmentCard(appt);
-                                                    return renderEmptyPlaceholder(timeUtc, 2);
-                                                })
-                                            }
-                                        </ul>
-                                    </div>
+                                    ))}
                                 </div>
                             ) : (
                                 <div className="flex flex-col md:flex-row gap-8 pb-8">
@@ -605,10 +736,7 @@ export default function Calendar() {
                             <div className="flex flex-col gap-3 pb-8 h-full">
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
                                     {selectedProfessional === 'ALL' ? (
-                                        [
-                                            { label: 'Room 1', roomNumber: 1, slots: FULL_DAY_SLOTS },
-                                            { label: 'Room 2', roomNumber: 2, slots: FULL_DAY_SLOTS },
-                                        ].map(({ label, roomNumber, slots }) => {
+                                        rooms.map(room => ({ label: room.label, roomNumber: room.room_number, slots: FULL_DAY_SLOTS })).map(({ label, roomNumber, slots }) => {
                                             const currentDate = currentWeekStart.plus({ days: selectedDayIndex });
                                             
                                             return (

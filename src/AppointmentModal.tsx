@@ -32,6 +32,12 @@ interface Appointment {
     room_number: number;
 }
 
+interface Room {
+    id: number;
+    room_number: number;
+    label: string;
+}
+
 interface AppointmentModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -63,7 +69,8 @@ export default function AppointmentModal({
     const [clientPhone, setClientPhone] = useState('');
     const [appointmentNote, setAppointmentNote] = useState('');
     const [countryIso2, setCountryIso2] = useState(DEFAULT_COUNTRY_ISO2);
-    const [roomNumber, setRoomNumber] = useState('1');
+    const [roomNumber, setRoomNumber] = useState('');
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
 
@@ -117,7 +124,7 @@ export default function AppointmentModal({
             setTempTime(times);
 
         } else if (initialDate && initialTime && initialTime.length > 0) {
-            setModalProfessionalId(selectedProfessionalId === 'ALL' ? (professionals[0]?.id.toString() || '') : selectedProfessionalId);
+            setModalProfessionalId((selectedProfessionalId === 'ALL' || selectedProfessionalId === 'MONTH_SUMMARY') ? (professionals[0]?.id.toString() || '') : selectedProfessionalId);
             setConfirmedDate(initialDate);
             setConfirmedTime(initialTime);
             setTempDate(initialDate);
@@ -127,17 +134,17 @@ export default function AppointmentModal({
             setClientPhone('');
             setAppointmentNote('');
             setCountryIso2(DEFAULT_COUNTRY_ISO2);
-            setRoomNumber(initialRoom || '1');
+            setRoomNumber(initialRoom || '');
             setActivePanel('NONE');
         } else {
-            setModalProfessionalId(selectedProfessionalId === 'ALL' ? (professionals[0]?.id.toString() || '') : selectedProfessionalId);
+            setModalProfessionalId((selectedProfessionalId === 'ALL' || selectedProfessionalId === 'MONTH_SUMMARY') ? (professionals[0]?.id.toString() || '') : selectedProfessionalId);
             setConfirmedDate(null);
             setConfirmedTime([]);
             setClientName('');
             setClientPhone('');
             setAppointmentNote('');
             setCountryIso2(DEFAULT_COUNTRY_ISO2);
-            setRoomNumber('1');
+            setRoomNumber('');
             setTempTime([]);
         }
 
@@ -147,6 +154,23 @@ export default function AppointmentModal({
             if (matchingProf) setModalProfessionalId(matchingProf.id.toString());
         }
     }, [isOpen, selectedProfessionalId, professionals, appointmentToEdit, role, username, initialDate, initialTime, initialRoom]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const fetchRooms = async () => {
+            const { data, error } = await supabase.from('rooms').select('*').order('room_number', { ascending: true });
+            if (!error && data) setRooms(data);
+        };
+        fetchRooms();
+    }, [isOpen]);
+
+    // Backfills the default clinic room once the room list loads, without disturbing a room
+    // the user (or an edited appointment, or a grid deep-link) has already selected
+    useEffect(() => {
+        if (!isOpen || appointmentToEdit || roomNumber || rooms.length === 0) return;
+        setRoomNumber(rooms[0].room_number.toString());
+    }, [isOpen, appointmentToEdit, roomNumber, rooms]);
 
     // The pharmacy is strictly closed on Sundays and Malta public holidays, regardless of any
     // availability rows that might exist for that day (e.g. a mistaken Sunday schedule entry).
@@ -273,7 +297,7 @@ export default function AppointmentModal({
         setErrorMessage('');
         setIsSubmitting(true);
 
-        if (!clientName.trim() || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0) {
+        if (!clientName.trim() || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0 || !roomNumber) {
             setErrorMessage('All fields are required. Phone must be at least 8 digits.');
             setIsSubmitting(false);
             return;
@@ -558,23 +582,32 @@ export default function AppointmentModal({
 
                         <div className="pt-1">
                             <label className="block text-sm font-semibold text-pharmacy-ink mb-2">Assigned Clinic Room</label>
-                            <div className="flex items-center gap-6">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="room" value="1" checked={roomNumber === '1'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-pharmacy-gold-dark border-pharmacy-ink/30 focus:ring-pharmacy-gold"/>
-                                    <span className="text-sm text-pharmacy-ink font-medium">Room 1</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="room" value="2" checked={roomNumber === '2'} onChange={(e) => setRoomNumber(e.target.value)} className="w-4 h-4 text-pharmacy-gold-dark border-pharmacy-ink/30 focus:ring-pharmacy-gold"/>
-                                    <span className="text-sm text-pharmacy-ink font-medium">Room 2</span>
-                                </label>
-                            </div>
+                            {rooms.length === 0 ? (
+                                <p className="text-xs text-pharmacy-muted">No clinic rooms registered. Add one in Staff Management first.</p>
+                            ) : (
+                                <div className="flex items-center gap-6 flex-wrap">
+                                    {rooms.map(room => (
+                                        <label key={room.id} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="room"
+                                                value={room.room_number}
+                                                checked={roomNumber === room.room_number.toString()}
+                                                onChange={(e) => setRoomNumber(e.target.value)}
+                                                className="w-4 h-4 text-pharmacy-gold-dark border-pharmacy-ink/30 focus:ring-pharmacy-gold"
+                                            />
+                                            <span className="text-sm text-pharmacy-ink font-medium">{room.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="mt-auto pt-4 border-t border-pharmacy-cream-dark flex justify-between items-center shrink-0">
                             <button type="button" onClick={onClose} disabled={isSubmitting} className="text-sm font-semibold text-pharmacy-muted hover:text-pharmacy-ink transition">
                                 Cancel & Close
                             </button>
-                            <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0} className="rounded-full bg-pharmacy-gold px-6 py-2.5 text-sm font-bold text-pharmacy-green shadow-md hover:bg-pharmacy-gold-dark hover:text-white disabled:bg-gray-300 disabled:text-white disabled:shadow-none transition-all">
+                            <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0 || !roomNumber} className="rounded-full bg-pharmacy-gold px-6 py-2.5 text-sm font-bold text-pharmacy-green shadow-md hover:bg-pharmacy-gold-dark hover:text-white disabled:bg-gray-300 disabled:text-white disabled:shadow-none transition-all">
                                 {isSubmitting ? 'Saving...' : (appointmentToEdit ? 'Confirm Reschedule' : 'Confirm Appointment')}
                             </button>
                         </div>

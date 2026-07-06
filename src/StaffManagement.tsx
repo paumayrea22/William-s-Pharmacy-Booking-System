@@ -19,17 +19,27 @@ interface Availability {
     end_time: string;
 }
 
+interface Room {
+    id: number;
+    room_number: number;
+    label: string;
+}
+
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function StaffManagement() {
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [selectedProfessional, setSelectedProfessional] = useState<string>('');
     const [availabilities, setAvailabilities] = useState<Availability[]>([]);
-    
+    const [rooms, setRooms] = useState<Room[]>([]);
+
     // States for the new professional registration form
     const [newName, setNewName] = useState('');
     const [newSpecialty, setNewSpecialty] = useState('');
     const [newDuration, setNewDuration] = useState('15');
+
+    // State for the new clinic room registration form
+    const [newRoomLabel, setNewRoomLabel] = useState('');
     
     // States for weekly availability assignment
     const [newDay, setNewDay] = useState('1'); 
@@ -82,8 +92,26 @@ export default function StaffManagement() {
         }
     };
 
+    // Retrieves the complete list of registered clinic rooms
+    const fetchRooms = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('rooms')
+                .select('*')
+                .order('room_number', { ascending: true });
+
+            if (error) {
+                throw new Error(error.message);
+            }
+            setRooms(data || []);
+        } catch (error) {
+            setErrorMessage('Infrastructure error loading rooms: ' + getErrorMessage(error));
+        }
+    };
+
     useEffect(() => {
         fetchProfessionals();
+        fetchRooms();
     }, []);
 
     useEffect(() => {
@@ -210,6 +238,60 @@ export default function StaffManagement() {
             await fetchAvailabilities();
         } catch (error) {
             setErrorMessage('Error purging schedule: ' + getErrorMessage(error));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Next free room number, so a new room never collides with an existing one
+    const nextRoomNumber = rooms.length > 0 ? Math.max(...rooms.map(r => r.room_number)) + 1 : 1;
+
+    // Registers a new clinic room, immediately selectable in the appointment booking form
+    const createRoom = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMessage('');
+
+        const label = newRoomLabel.trim() || `Room ${nextRoomNumber}`;
+
+        setIsLoading(true);
+        try {
+            const { error } = await supabase
+                .from('rooms')
+                .insert({ room_number: nextRoomNumber, label });
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            setNewRoomLabel('');
+            await fetchRooms();
+        } catch (error) {
+            setErrorMessage('Error creating room: ' + getErrorMessage(error));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Removes a clinic room; the database rejects this if appointments still reference it
+    const deleteRoom = async (roomId: number, roomLabel: string) => {
+        const confirmation = window.confirm(`Are you strictly sure you want to permanently delete "${roomLabel}"?`);
+        if (!confirmation) return;
+
+        setIsLoading(true);
+        try {
+            const { error } = await supabase.from('rooms').delete().eq('id', roomId);
+
+            if (error) {
+                // Postgres foreign_key_violation: this room is still referenced by appointment records
+                if (error.code === '23503') {
+                    throw new Error(`Cannot delete "${roomLabel}": it still has appointments on record.`);
+                }
+                throw new Error(error.message);
+            }
+
+            await fetchRooms();
+        } catch (error) {
+            setErrorMessage('Error deleting room: ' + getErrorMessage(error));
         } finally {
             setIsLoading(false);
         }
@@ -381,6 +463,57 @@ export default function StaffManagement() {
                             </ul>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Clinic Room Management Panel */}
+            <div className="bg-white border border-pharmacy-ink/10 p-5 rounded-xl shadow-sm flex flex-col gap-4">
+                <div className="border-b pb-2 border-pharmacy-cream-dark">
+                    <h2 className="font-display text-lg text-pharmacy-ink">Clinic Rooms</h2>
+                    <p className="text-xs text-pharmacy-muted mt-0.5">
+                        Rooms registered here become selectable when booking or rescheduling an appointment.
+                    </p>
+                </div>
+
+                <form onSubmit={createRoom} className="flex items-end gap-2">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-pharmacy-muted mb-1">Room Name</label>
+                        <input
+                            type="text"
+                            value={newRoomLabel}
+                            onChange={(e) => setNewRoomLabel(e.target.value)}
+                            placeholder={`E.g. Room ${nextRoomNumber}`}
+                            className="w-full border border-pharmacy-ink/20 rounded-lg p-2 text-sm shadow-sm focus:border-pharmacy-gold focus:outline-none focus:ring-1 focus:ring-pharmacy-gold"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="bg-pharmacy-green text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-pharmacy-green-light transition disabled:opacity-50 shrink-0"
+                    >
+                        Add Room
+                    </button>
+                </form>
+
+                <div className="max-h-48 overflow-y-auto border border-pharmacy-ink/10 rounded-lg custom-scrollbar">
+                    {rooms.length === 0 ? (
+                        <p className="text-xs text-pharmacy-muted p-4 text-center">No clinic rooms registered yet.</p>
+                    ) : (
+                        <ul className="divide-y divide-pharmacy-cream-dark">
+                            {rooms.map(room => (
+                                <li key={room.id} className="p-3 text-xs flex justify-between items-center hover:bg-pharmacy-cream">
+                                    <span className="font-bold text-pharmacy-ink">{room.label}</span>
+                                    <button
+                                        onClick={() => deleteRoom(room.id, room.label)}
+                                        disabled={isLoading}
+                                        className="text-red-700/80 font-bold hover:text-red-700 transition disabled:opacity-50"
+                                    >
+                                        Delete
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
             </div>
 
