@@ -1,26 +1,27 @@
 -- Layer 1: Data Definition Language (DDL) and Table Structures
--- Utilizing IF NOT EXISTS to prevent accidental overwrites in production
+
+-- 1. Destructive Operations (Cleanup obsolete tables)
+DROP TABLE IF EXISTS public.holiday_overrides CASCADE;
+
+-- 2. System Extensions
+CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS citext SCHEMA public;
+
+-- 3. Core Tables
+CREATE TABLE IF NOT EXISTS rooms (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    room_number SMALLINT NOT NULL UNIQUE,
+    label VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS professionals (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    full_name VARCHAR(150) NOT NULL,
+    full_name extensions.citext NOT NULL UNIQUE,
     specialty VARCHAR(100) NOT NULL,
     default_duration_minutes SMALLINT NOT NULL DEFAULT 15,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Dynamic patch to enforce UNIQUE constraint on older live tables safely
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint con 
-        JOIN pg_class rel ON rel.oid = con.conrelid 
-        WHERE rel.relname = 'professionals' AND con.contype = 'u'
-    ) THEN
-        ALTER TABLE professionals ADD CONSTRAINT professionals_full_name_key UNIQUE (full_name);
-    END IF;
-END
-$$;
 
 CREATE TABLE IF NOT EXISTS availabilities (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -34,8 +35,8 @@ CREATE TABLE IF NOT EXISTS availabilities (
 CREATE TABLE IF NOT EXISTS appointments (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     professional_id BIGINT REFERENCES professionals(id) ON DELETE RESTRICT,
-    room_number SMALLINT NOT NULL CHECK (room_number IN (1, 2)),
-    client_name VARCHAR(150) NOT NULL,
+    room_number SMALLINT REFERENCES rooms(room_number) ON DELETE RESTRICT,
+    client_name extensions.citext NOT NULL,
     client_phone VARCHAR(30) NOT NULL,
     start_time_utc TIMESTAMPTZ NOT NULL,
     end_time_utc TIMESTAMPTZ NOT NULL,
@@ -47,44 +48,39 @@ CREATE TABLE IF NOT EXISTS appointments (
     CHECK (start_time_utc < end_time_utc)
 );
 
--- Performance Indexes (Critical for Nano instance memory management)
+CREATE TABLE IF NOT EXISTS doctor_leaves (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    professional_id INT NOT NULL REFERENCES professionals(id) ON DELETE CASCADE,
+    leave_date DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by_username VARCHAR(50) NOT NULL,
+    UNIQUE(professional_id, leave_date)
+);
+
+-- 4. Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_rooms_room_number ON rooms(room_number);
 CREATE INDEX IF NOT EXISTS idx_availabilities_prof_day ON availabilities(professional_id, day_of_week);
 CREATE INDEX IF NOT EXISTS idx_appointments_start_time ON appointments(start_time_utc);
 CREATE INDEX IF NOT EXISTS idx_appointments_room ON appointments(room_number);
 CREATE INDEX IF NOT EXISTS idx_appointments_professional ON appointments(professional_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+CREATE INDEX IF NOT EXISTS idx_professionals_name_trgm ON professionals USING GIN (full_name extensions.gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_appointments_client_name_trgm ON appointments USING GIN (client_name extensions.gin_trgm_ops);
 
--- Idempotent Seed Data
+-- 5. Idempotent Seed Data & Mutators
+INSERT INTO rooms (room_number, label) VALUES
+(1, 'Room 1'),
+(2, 'Room 2')
+ON CONFLICT (room_number) DO NOTHING;
+
 INSERT INTO professionals (full_name, specialty, default_duration_minutes) VALUES 
 ('Dr. Fsadni', 'General Medicine', 15),
-('Dr. Christopher Sciberras', 'Pediatrics', 15),
+('Dr. Christopher Sciberras', 'Pediatrics', 30),
 ('Dra. Martha Spiteri', 'General Medicine', 15),
 ('Keith Pirotta', 'Educational Psychologist', 60),
 ('Anthea Borg', 'Podiatrist', 15),
 ('Dr. Sciberras', 'General Medicine', 15)
 ON CONFLICT (full_name) DO NOTHING;
 
--- ==========================================
--- System Extensions & Advanced Configuration
--- ==========================================
-
--- 1. Integration of CITEXT for Case-Insensitive Operational Searches
-ALTER TABLE professionals ALTER COLUMN full_name TYPE extensions.citext;
-ALTER TABLE appointments ALTER COLUMN client_name TYPE extensions.citext;
-
--- 2. Configuration of PG_CRON for Automated Midnight Maintenance
-SELECT cron.schedule(
-    'nightly-appointment-cleanup',
-    '59 23 * * *',
-    $$ UPDATE public.appointments SET status = 'completed' WHERE end_time_utc < NOW() AND status = 'confirmed'; $$
-);
-
--- 3. Integration of PG_TRGM for Fuzzy Text Searching (Typo Tolerance)
--- Trigram indexes allow fast similarity matching without burning CPU cycles
-CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public;
-
-CREATE INDEX IF NOT EXISTS idx_professionals_name_trgm 
-ON professionals USING GIN (full_name extensions.gin_trgm_ops);
-
-CREATE INDEX IF NOT EXISTS idx_appointments_client_name_trgm 
-ON appointments USING GIN (client_name extensions.gin_trgm_ops);
+-- Enforce the 30-minute block invariant for existing DB instances
+UPDATE professionals SET default_duration_minutes = 30 WHERE full_name = 'Dr. Christopher Sciberras';
