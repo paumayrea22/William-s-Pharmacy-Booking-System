@@ -2,9 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Layout from './Layout';
 import Calendar from './Calendar';
 import StaffManagement from './StaffManagement';
+import DoctorLeaveManagement from './DoctorLeaveManagement';
 import StressTest from './StressTest';
 import Login from './Login';
-// Import the navigation guard we just created (using named export)
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AppointmentModal from './AppointmentModal';
 
@@ -38,6 +38,7 @@ export default function App() {
                     <Route element={<Layout />}>
                         <Route path="/" element={<Calendar />} />
                         <Route path="/staff" element={<StaffManagement />} />
+                        <Route path="/leaves" element={<DoctorLeaveManagement />} />
                         <Route path="/stress-test" element={<StressTest />} />
                     </Route>
                 </Route>
