@@ -279,7 +279,9 @@ export default function StaffManagement() {
 
         setIsLoading(true);
         try {
-            const { error } = await supabase.from('rooms').delete().eq('id', roomId);
+            // .select() forces Postgres to report which rows were actually deleted, so a Row Level
+            // Security denial (0 rows matched, error: null) can be detected instead of silently ignored
+            const { data, error } = await supabase.from('rooms').delete().eq('id', roomId).select();
 
             if (error) {
                 // Postgres foreign_key_violation: this room is still referenced by appointment records
@@ -287,6 +289,10 @@ export default function StaffManagement() {
                     throw new Error(`Cannot delete "${roomLabel}": it still has appointments on record.`);
                 }
                 throw new Error(error.message);
+            }
+
+            if (!data || data.length === 0) {
+                throw new Error('Delete blocked by database permissions: confirm you are signed in as a pharmacist (sign out and back in if your role was recently granted).');
             }
 
             await fetchRooms();
@@ -312,7 +318,7 @@ export default function StaffManagement() {
             </div>
 
             {errorMessage && (
-                <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm font-medium">
+                <div className="sticky top-0 z-10 bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm font-medium shadow-md">
                     {errorMessage}
                 </div>
             )}

@@ -6,6 +6,7 @@ import DoctorLeaveManagement from './DoctorLeaveManagement';
 import StressTest from './StressTest';
 import Login from './Login';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { PharmacistOnlyRoute } from './components/PharmacistOnlyRoute';
 
 export default function App() {
     return (
@@ -19,7 +20,9 @@ export default function App() {
                     {/* UI Layout wrapper for all authenticated internal views */}
                     <Route element={<Layout />}>
                         <Route path="/" element={<Calendar />} />
-                        <Route path="/staff" element={<StaffManagement />} />
+                        <Route element={<PharmacistOnlyRoute />}>
+                            <Route path="/staff" element={<StaffManagement />} />
+                        </Route>
                         <Route path="/leaves" element={<DoctorLeaveManagement />} />
                         <Route path="/stress-test" element={<StressTest />} />
                     </Route>

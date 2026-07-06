@@ -71,16 +71,18 @@ export default function Layout() {
                                 Calendar
                             </Link>
 
-                            {/* Link to the staff management module */}
-                            <Link
-                                to="/staff"
-                                onClick={closeMobileDrawer}
-                                className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
-                                    location.pathname === '/staff' ? 'bg-pharmacy-green-light text-white shadow-inner' : 'text-pharmacy-cream/70 hover:bg-pharmacy-green-light/60 hover:text-white'
-                                }`}
-                            >
-                                Staff Management
-                            </Link>
+                            {/* Link to the staff management module; hidden for doctors, who are also blocked at the route level */}
+                            {role !== 'doctor' && (
+                                <Link
+                                    to="/staff"
+                                    onClick={closeMobileDrawer}
+                                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
+                                        location.pathname === '/staff' ? 'bg-pharmacy-green-light text-white shadow-inner' : 'text-pharmacy-cream/70 hover:bg-pharmacy-green-light/60 hover:text-white'
+                                    }`}
+                                >
+                                    Staff Management
+                                </Link>
+                            )}
 
                             {/* Link to the dynamic doctor vacations management module */}
                             <Link
