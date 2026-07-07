@@ -1,7 +1,17 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { useAuth } from './context/AuthContext';
+
+// Extend the global Window interface to support the experimental PWA API
+interface BeforeInstallPromptEvent extends Event {
+    readonly platforms: string[];
+    readonly userChoice: Promise<{
+        outcome: 'accepted' | 'dismissed';
+        platform: string;
+    }>;
+    prompt(): Promise<void>;
+}
 
 export default function Layout() {
     const location = useLocation();
@@ -10,9 +20,51 @@ export default function Layout() {
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+    
+    // States to handle the PWA installation lifecycle
+    const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [isInstallable, setIsInstallable] = useState(false);
 
     const displayUsername = username ?? 'User';
     const displayRole = role ? role.toUpperCase() : 'STAFF';
+
+    useEffect(() => {
+        // Intercept the browser's native installation prompt
+        const handleBeforeInstallPrompt = (e: Event) => {
+            e.preventDefault();
+            setDeferredPrompt(e as BeforeInstallPromptEvent);
+            setIsInstallable(true);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        // Hide the button permanently once the app is successfully installed
+        const handleAppInstalled = () => {
+            setIsInstallable(false);
+            setDeferredPrompt(null);
+        };
+
+        window.addEventListener('appinstalled', handleAppInstalled);
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+        };
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+        
+        // Trigger the native installation dialog programmatically
+        await deferredPrompt.prompt();
+        
+        // Wait for the user's resolution
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setIsInstallable(false);
+            setDeferredPrompt(null);
+        }
+    };
 
     const handleSignOut = async () => {
         // Destroy the JWT token on the server and clear local storage
@@ -97,7 +149,20 @@ export default function Layout() {
                         </nav>
                     </div>
 
-                    <div className="p-4">
+                    <div className="p-4 flex flex-col gap-2">
+                        {/* Dynamic PWA Installation Button (Renders only if supported and not installed) */}
+                        {isInstallable && (
+                            <button
+                                onClick={handleInstallClick}
+                                className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold bg-pharmacy-gold text-pharmacy-green hover:bg-pharmacy-gold-dark hover:text-white transition-colors shadow-md"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                Install App
+                            </button>
+                        )}
+
                         <button
                             onClick={handleSignOut}
                             className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-pharmacy-cream/70 hover:bg-pharmacy-green-light hover:text-white transition-colors border border-pharmacy-green-light"
