@@ -154,7 +154,9 @@ export default function DoctorLeaveManagement() {
             return;
         }
 
-        const sqlDayOfWeek = parsed.weekday === 7 ? 0 : parsed.weekday;
+        // TypeScript Control Flow Analysis recognizes parsed.weekday is strictly 1-6 here
+        // Postgres EXTRACT(DOW) maps Monday-Saturday as 1-6, aligning perfectly with Luxon.
+        const sqlDayOfWeek = parsed.weekday;
         if (!availabilities.some(a => a.day_of_week === sqlDayOfWeek)) {
             setErrorMessage('Validation Error: Target professional has no active schedule for this day of the week.');
             return;
@@ -242,6 +244,7 @@ export default function DoctorLeaveManagement() {
             const isSunday = dateObj.weekday === 7;
             const isNationalHoliday = getMaltaHolidayName(dateISO) !== null;
             
+            // Loop scope mapping: dateObj.weekday can be 7 here, requiring manual ternary mapping to Postgres DOW 0
             const sqlDayOfWeek = dateObj.weekday === 7 ? 0 : dateObj.weekday;
             const worksOnThisDay = availabilities.some(a => a.day_of_week === sqlDayOfWeek);
             
@@ -296,7 +299,7 @@ export default function DoctorLeaveManagement() {
     ].filter(h => DateTime.fromISO(h.date, { zone: 'Europe/Malta' }) >= currentToday);
 
     return (
-        <div className="p-4 sm:p-6 bg-pharmacy-cream h-screen overflow-y-auto custom-scrollbar flex flex-col gap-6 pb-16">
+        <div className="p-4 sm:p-6 bg-pharmacy-cream h-full overflow-y-auto custom-scrollbar flex flex-col gap-6 pb-16">
             <div className="shrink-0">
                 <p className="text-xs font-semibold tracking-[0.2em] text-pharmacy-gold-dark uppercase">Vacation Controls</p>
                 <h1 className="font-display text-3xl text-pharmacy-ink">Manage Doctor Leave Schemes</h1>
