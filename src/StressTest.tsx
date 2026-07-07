@@ -74,12 +74,14 @@ export default function StressTest() {
         setConcurrencyResults([]);
         setLoadMetrics(null);
 
-        // Calculate a strict invariant time: Exactly 1 month into the future
         const today = DateTime.local({ zone: 'Europe/Malta' });
-        const targetLuxonDow = targetAvailability.day_of_week === 0 ? 7 : targetAvailability.day_of_week;
+        
+        // Strict Type Casting to satisfy Luxon's WeekdayNumbers interface
+        const targetLuxonDow = (targetAvailability.day_of_week === 0 ? 7 : targetAvailability.day_of_week) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
         
         const [hours, minutes] = targetAvailability.start_time.split(':');
         
+        // Calculate a strict invariant time exactly 1 month into the future
         const testDate = today.plus({ months: 1 })
             .set({ weekday: targetLuxonDow })
             .set({ hour: parseInt(hours), minute: parseInt(minutes), second: 0, millisecond: 0 });
@@ -153,7 +155,9 @@ export default function StressTest() {
 
         const BATCH_SIZE = 15;
         const today = DateTime.local({ zone: 'Europe/Malta' });
-        const targetLuxonDow = targetAvailability.day_of_week === 0 ? 7 : targetAvailability.day_of_week;
+        
+        // Strict Type Casting to satisfy Luxon's WeekdayNumbers interface
+        const targetLuxonDow = (targetAvailability.day_of_week === 0 ? 7 : targetAvailability.day_of_week) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
         const [hours, minutes] = targetAvailability.start_time.split(':');
 
         const promises = [];
