@@ -76,7 +76,6 @@ interface SlotDetails {
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-// Extract note metadata directly inside the calendar to display it
 const extractNameAndNote = (fullName: string) => {
     const match = fullName.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
     return {
@@ -85,7 +84,7 @@ const extractNameAndNote = (fullName: string) => {
     };
 };
 
-// Starts precisely at 07:30 instead of 08:00
+// Starts precisely at 07:30
 const MORNING_SLOTS: { hour: number; minute: number }[] = [];
 for (let hour = 7; hour < 14; hour++) {
     for (const minute of [0, 15, 30, 45]) {
@@ -94,22 +93,28 @@ for (let hour = 7; hour < 14; hour++) {
     }
 }
 
+// Afternoon slots restricted to close precisely at 19:30 (last slot is 19:15)
 const AFTERNOON_SLOTS: { hour: number; minute: number }[] = [];
 for (let hour = 14; hour <= 19; hour++) {
     for (const minute of [0, 15, 30, 45]) {
+        if (hour === 19 && minute >= 30) continue; 
         AFTERNOON_SLOTS.push({ hour, minute });
     }
 }
 
 const FULL_DAY_SLOTS: { hour: number; minute: number }[] = [...MORNING_SLOTS, ...AFTERNOON_SLOTS];
 
-// Builds continuous slots honoring the professional's default duration
+// Builds continuous slots honoring duration and enforcing the 19:30 hard cutoff
 const buildTimeSlots = (startHour: number, endHour: number, stepMinutes: number): { hour: number; minute: number }[] => {
     const slots: { hour: number; minute: number }[] = [];
     let startMin = startHour * 60;
-    if (startHour === 7) startMin = 7 * 60 + 30; // Force 07:30 start
+    if (startHour === 7) startMin = 7 * 60 + 30;
 
-    for (let totalMinutes = startMin; totalMinutes < endHour * 60; totalMinutes += stepMinutes) {
+    const absoluteEndMin = 19 * 60 + 30; 
+    const calculatedEndMin = endHour * 60;
+    const endMin = Math.min(calculatedEndMin, absoluteEndMin);
+
+    for (let totalMinutes = startMin; totalMinutes < endMin; totalMinutes += stepMinutes) {
         slots.push({ hour: Math.floor(totalMinutes / 60), minute: totalMinutes % 60 });
     }
     return slots;
@@ -134,7 +139,6 @@ export default function Calendar() {
     const [currentWeekStart, setCurrentWeekStart] = useState<DateTime>(() => DateTime.local({ zone: 'Europe/Malta' }).startOf('week'));
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     
-    // Unified Temporal Filter (-1 represents "All Week" for List view)
     const [selectedDayIndex, setSelectedDayIndex] = useState<number>(-1);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -145,7 +149,6 @@ export default function Calendar() {
 
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // Clinic-wide monthly overview (all professionals, all rooms), independent of the weekly filters above
     const [monthSummaryDate, setMonthSummaryDate] = useState<DateTime>(() => DateTime.local({ zone: 'Europe/Malta' }).startOf('month'));
     const [monthSummaryAppointments, setMonthSummaryAppointments] = useState<Appointment[]>([]);
     const [isMonthSummaryLoading, setIsMonthSummaryLoading] = useState(false);
@@ -335,7 +338,6 @@ export default function Calendar() {
         const slotDate = currentWeekStart.plus({ days: dayIndex }).set({ hour, minute });
         const sqlDayIndex = slotDate.weekday === 7 ? 0 : slotDate.weekday;
 
-        // The pharmacy is strictly closed on Sundays, regardless of any availability rows for that day
         if (slotDate.weekday === 7) return { status: 'Holiday', label: 'Sunday (Closed)' };
 
         const holidayName = getMaltaHolidayName(slotDate.toISODate()!);
@@ -425,7 +427,6 @@ export default function Calendar() {
         );
     };
 
-    // Apply the Day Filter to the payload
     const filteredAppointments = selectedDayIndex === -1 
         ? appointments 
         : appointments.filter(a => {
@@ -444,8 +445,8 @@ export default function Calendar() {
     }, {} as Record<number, Availability[]>);
 
     const gridStepMinutes = professionals.find(p => p.id.toString() === selectedProfessional)?.default_duration_minutes ?? 15;
-    const morningSlots = buildTimeSlots(7, 14, gridStepMinutes); // Starts at 7:30 explicitly now
-    const afternoonSlots = buildTimeSlots(14, 20, gridStepMinutes);
+    const morningSlots = buildTimeSlots(7, 14, gridStepMinutes); 
+    const afternoonSlots = buildTimeSlots(14, 20, gridStepMinutes); 
 
     const MONTH_SUMMARY_STATUS_STYLES: Record<string, string> = {
         confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200',

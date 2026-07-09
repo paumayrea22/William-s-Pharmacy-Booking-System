@@ -64,6 +64,9 @@ export default function AppointmentModal({
     const { role, username } = useAuth();
     const staffUsername = username ?? 'System';
 
+    // Identifies if the modal was opened by clicking a specific cell on the grid
+    const isGridDeepLink = !!(initialDate && initialTime && initialTime.length > 0 && !appointmentToEdit);
+
     const [modalProfessionalId, setModalProfessionalId] = useState(selectedProfessionalId);
     const [clientName, setClientName] = useState('');
     const [clientPhone, setClientPhone] = useState('');
@@ -83,9 +86,11 @@ export default function AppointmentModal({
     const [monthAvailabilities, setMonthAvailabilities] = useState<Availability[]>([]);
     const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
     const [availableSlots, setAvailableSlots] = useState<{ time: string; isBooked: boolean }[]>([]);
+    const [gridEligibleDoctors, setGridEligibleDoctors] = useState<number[] | null>(null);
     
     const [currentMonth, setCurrentMonth] = useState<DateTime>(DateTime.local({ zone: 'Europe/Malta' }));
 
+    // Core Initialization
     useEffect(() => {
         if (!isOpen) return;
 
@@ -123,13 +128,13 @@ export default function AppointmentModal({
             setConfirmedTime(times);
             setTempTime(times);
 
-        } else if (initialDate && initialTime && initialTime.length > 0) {
+        } else if (isGridDeepLink) {
             setModalProfessionalId((selectedProfessionalId === 'ALL' || selectedProfessionalId === 'MONTH_SUMMARY') ? (professionals[0]?.id.toString() || '') : selectedProfessionalId);
-            setConfirmedDate(initialDate);
-            setConfirmedTime(initialTime);
-            setTempDate(initialDate);
-            setTempTime(initialTime);
-            setCurrentMonth(initialDate);
+            setConfirmedDate(initialDate!);
+            setConfirmedTime(initialTime!);
+            setTempDate(initialDate!);
+            setTempTime(initialTime!);
+            setCurrentMonth(initialDate!);
             setClientName('');
             setClientPhone('');
             setAppointmentNote('');
@@ -153,7 +158,7 @@ export default function AppointmentModal({
             const matchingProf = professionals.find(p => p.full_name.includes(doctorName));
             if (matchingProf) setModalProfessionalId(matchingProf.id.toString());
         }
-    }, [isOpen, selectedProfessionalId, professionals, appointmentToEdit, role, username, initialDate, initialTime, initialRoom]);
+    }, [isOpen, selectedProfessionalId, professionals, appointmentToEdit, role, username, initialDate, initialTime, initialRoom, isGridDeepLink]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -165,17 +170,79 @@ export default function AppointmentModal({
         fetchRooms();
     }, [isOpen]);
 
-    // Backfills the default clinic room once the room list loads, without disturbing a room
-    // the user (or an edited appointment, or a grid deep-link) has already selected
     useEffect(() => {
         if (!isOpen || appointmentToEdit || roomNumber || rooms.length === 0) return;
         setRoomNumber(rooms[0].room_number.toString());
     }, [isOpen, appointmentToEdit, roomNumber, rooms]);
 
-    // The pharmacy is strictly closed on Sundays and Malta public holidays, regardless of any
-    // availability rows that might exist for that day (e.g. a mistaken Sunday schedule entry).
+    // Fast-tracks eligible doctors logic when opening from the grid to disable doctors that don't fit the slot
+    useEffect(() => {
+        if (!isOpen || !isGridDeepLink || !initialDate || !initialTime) {
+            setGridEligibleDoctors(null);
+            return;
+        }
+
+        const fetchEligibility = async () => {
+            const sqlDay = initialDate.weekday === 7 ? 0 : initialDate.weekday;
+            const dateIso = initialDate.toISODate()!;
+            const slotTimeString = initialTime[0]; 
+            const [slotHour, slotMin] = slotTimeString.split(':').map(Number);
+            const slotMins = slotHour * 60 + slotMin;
+            
+            const startOfDay = initialDate.startOf('day').toUTC().toISO();
+            const endOfDay = initialDate.endOf('day').toUTC().toISO();
+
+            const [availRes, apptRes] = await Promise.all([
+                supabase.from('availabilities').select('professional_id, start_time, end_time').eq('day_of_week', sqlDay),
+                supabase.from('appointments').select('professional_id, start_time_utc, end_time_utc, status').gte('start_time_utc', startOfDay).lte('start_time_utc', endOfDay)
+            ]);
+
+            const avails = availRes.data || [];
+            const appts = apptRes.data || [];
+            const eligibleIds: number[] = [];
+
+            professionals.forEach(prof => {
+                const profAvails = avails.filter(a => a.professional_id === prof.id);
+                const hasWorkingHours = profAvails.some(a => {
+                    const [sH, sM] = a.start_time.split(':').map(Number);
+                    const [eH, eM] = a.end_time.split(':').map(Number);
+                    const startM = sH * 60 + sM;
+                    const endM = eH * 60 + eM;
+                    return slotMins >= startM && slotMins < endM;
+                });
+
+                if (!hasWorkingHours) return;
+
+                const slotStartUTC = DateTime.fromISO(`${dateIso}T${slotTimeString}`, { zone: 'Europe/Malta' }).toUTC();
+                const slotEndUTC = slotStartUTC.plus({ minutes: prof.default_duration_minutes });
+
+                const hasConflict = appts.some(appt => {
+                    if (appt.professional_id !== prof.id || appt.status === 'cancelled') return false;
+                    const apptStart = DateTime.fromISO(appt.start_time_utc).toUTC();
+                    const apptEnd = DateTime.fromISO(appt.end_time_utc).toUTC();
+                    return slotStartUTC < apptEnd && apptStart < slotEndUTC;
+                });
+
+                if (!hasConflict) {
+                    eligibleIds.push(prof.id);
+                }
+            });
+
+            setGridEligibleDoctors(eligibleIds);
+            
+            if (eligibleIds.length > 0) {
+                setModalProfessionalId(prev => {
+                    if (!eligibleIds.includes(parseInt(prev))) return eligibleIds[0].toString();
+                    return prev;
+                });
+            }
+        };
+
+        fetchEligibility();
+    }, [isOpen, isGridDeepLink, initialDate, initialTime, professionals]);
+
     const isHolidayBlocked = (dateObj: DateTime): boolean => {
-        if (dateObj.weekday === 7) return true; // 7 is Sunday in Luxon
+        if (dateObj.weekday === 7) return true; 
         const dateISO = dateObj.toISODate();
         if (!dateISO) return false;
         return getMaltaHolidayName(dateISO) !== null;
@@ -262,6 +329,24 @@ export default function AppointmentModal({
     };
 
     const handleTimeSelection = (time: string) => {
+        if (isGridDeepLink) {
+            const baseTime = initialTime![0];
+            if (time === baseTime) return; // Core constraint: Cannot unselect the base slot
+            
+            const currentProf = professionals.find(p => p.id.toString() === modalProfessionalId);
+            const duration = currentProf ? currentProf.default_duration_minutes : 15;
+            const time1 = DateTime.fromFormat(baseTime, 'HH:mm');
+            const time2 = DateTime.fromFormat(time, 'HH:mm');
+            const diff = Math.abs(time1.diff(time2, 'minutes').minutes);
+            
+            // Allow selecting only the immediate contiguous slot to expand duration
+            if (diff === duration) {
+                if (tempTime.includes(time)) setTempTime([baseTime]);
+                else setTempTime([baseTime, time].sort());
+            }
+            return;
+        }
+
         if (!appointmentNote.trim()) {
             setTempTime([time]);
             return;
@@ -282,11 +367,8 @@ export default function AppointmentModal({
             const time2 = DateTime.fromFormat(time, 'HH:mm');
             const diff = Math.abs(time1.diff(time2, 'minutes').minutes);
             
-            if (diff === duration) {
-                setTempTime([...tempTime, time].sort());
-            } else {
-                setTempTime([time]); 
-            }
+            if (diff === duration) setTempTime([...tempTime, time].sort());
+            else setTempTime([time]); 
         } else {
             setTempTime([time]); 
         }
@@ -462,6 +544,26 @@ export default function AppointmentModal({
         );
     };
 
+    // Calculate conditional unlock for time expansion when using Deep Link
+    const hasNote = appointmentNote.trim().length > 0;
+    let hasNextSlotAvailable = false;
+    if (isGridDeepLink && confirmedTime.length > 0 && availableSlots.length > 0) {
+        const baseTimeStr = initialTime![0];
+        const currentIndex = availableSlots.findIndex(s => s.time === baseTimeStr);
+        if (currentIndex !== -1 && currentIndex + 1 < availableSlots.length) {
+            const nextSlot = availableSlots[currentIndex + 1];
+            if (!nextSlot.isBooked) {
+                const profDuration = professionals.find(p => p.id.toString() === modalProfessionalId)?.default_duration_minutes || 15;
+                const baseDT = DateTime.fromFormat(baseTimeStr, 'HH:mm');
+                const nextDT = DateTime.fromFormat(nextSlot.time, 'HH:mm');
+                if (Math.abs(nextDT.diff(baseDT, 'minutes').minutes) === profDuration) {
+                    hasNextSlotAvailable = true;
+                }
+            }
+        }
+    }
+    const canEditTime = !isGridDeepLink || (hasNote && hasNextSlotAvailable);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-pharmacy-green/50 p-4 backdrop-blur-sm">
             <div className="flex flex-col md:flex-row w-full max-w-4xl h-fit max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-y-auto md:overflow-hidden border border-pharmacy-ink/10">
@@ -488,15 +590,31 @@ export default function AppointmentModal({
                                     })()}
                                 </div>
                             ) : (
-                                <select
-                                    value={modalProfessionalId}
-                                    onChange={(e) => setModalProfessionalId(e.target.value)}
-                                    className="w-full rounded-lg border border-pharmacy-ink/20 p-2 text-pharmacy-ink shadow-sm focus:border-pharmacy-gold focus:ring-2 focus:ring-pharmacy-gold/20"
-                                >
-                                    {professionals.map(prof => (
-                                        <option key={prof.id} value={prof.id}>{prof.full_name} ({prof.specialty})</option>
-                                    ))}
-                                </select>
+                                <>
+                                    <select
+                                        value={modalProfessionalId}
+                                        onChange={(e) => {
+                                            setModalProfessionalId(e.target.value);
+                                            if (isGridDeepLink && initialTime) {
+                                                setConfirmedTime([initialTime[0]]);
+                                                setTempTime([initialTime[0]]);
+                                            }
+                                        }}
+                                        className="w-full rounded-lg border border-pharmacy-ink/20 p-2 text-pharmacy-ink shadow-sm focus:border-pharmacy-gold focus:ring-2 focus:ring-pharmacy-gold/20"
+                                    >
+                                        {professionals.map(prof => {
+                                            const isEligible = isGridDeepLink && gridEligibleDoctors !== null ? gridEligibleDoctors.includes(prof.id) : true;
+                                            return (
+                                                <option key={prof.id} value={prof.id} disabled={!isEligible}>
+                                                    {prof.full_name} ({prof.specialty}) {!isEligible ? '- Unavailable' : ''}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    {isGridDeepLink && gridEligibleDoctors !== null && gridEligibleDoctors.length === 0 && (
+                                        <p className="text-xs text-red-600 mt-1 font-semibold">No professionals are available for this specific time slot.</p>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -557,8 +675,9 @@ export default function AppointmentModal({
                                 <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Date</label>
                                 <button
                                     type="button"
+                                    disabled={isGridDeepLink}
                                     onClick={() => setActivePanel('DATE')}
-                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors ${activePanel === 'DATE' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
+                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors disabled:opacity-70 disabled:bg-gray-100 disabled:cursor-not-allowed ${activePanel === 'DATE' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
                                 >
                                     {confirmedDate ? confirmedDate.toFormat('dd/MM/yyyy') : <span className="text-pharmacy-muted">Select day...</span>}
                                 </button>
@@ -567,9 +686,9 @@ export default function AppointmentModal({
                                 <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Start Time</label>
                                 <button
                                     type="button"
-                                    disabled={!confirmedDate}
+                                    disabled={!confirmedDate || !canEditTime}
                                     onClick={() => setActivePanel('TIME')}
-                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors disabled:bg-pharmacy-cream-dark disabled:text-pharmacy-muted disabled:cursor-not-allowed ${activePanel === 'TIME' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
+                                    className={`w-full text-left rounded-lg border p-2 shadow-sm transition-colors disabled:opacity-70 disabled:bg-gray-100 disabled:cursor-not-allowed ${activePanel === 'TIME' ? 'border-pharmacy-gold ring-2 ring-pharmacy-gold/20 bg-pharmacy-gold/10' : 'border-pharmacy-ink/20 bg-white hover:bg-pharmacy-cream'}`}
                                 >
                                     {confirmedTime.length > 0 ? (
                                         confirmedTime.length === 1 ? confirmedTime[0] : `${confirmedTime[0]} & ${confirmedTime[1]}`
@@ -607,7 +726,11 @@ export default function AppointmentModal({
                             <button type="button" onClick={onClose} disabled={isSubmitting} className="text-sm font-semibold text-pharmacy-muted hover:text-pharmacy-ink transition">
                                 Cancel & Close
                             </button>
-                            <button type="submit" disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0 || !roomNumber} className="rounded-full bg-pharmacy-gold px-6 py-2.5 text-sm font-bold text-pharmacy-green shadow-md hover:bg-pharmacy-gold-dark hover:text-white disabled:bg-gray-300 disabled:text-white disabled:shadow-none transition-all">
+                            <button 
+                                type="submit" 
+                                disabled={isSubmitting || !clientName || clientPhone.length < 8 || !confirmedDate || confirmedTime.length === 0 || !roomNumber || (isGridDeepLink && gridEligibleDoctors?.length === 0)} 
+                                className="rounded-full bg-pharmacy-gold px-6 py-2.5 text-sm font-bold text-pharmacy-green shadow-md hover:bg-pharmacy-gold-dark hover:text-white disabled:bg-gray-300 disabled:text-white disabled:shadow-none transition-all"
+                            >
                                 {isSubmitting ? 'Saving...' : (appointmentToEdit ? 'Confirm Reschedule' : 'Confirm Appointment')}
                             </button>
                         </div>
@@ -655,23 +778,40 @@ export default function AppointmentModal({
                             ) : (
                                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                                     <div className="grid grid-cols-3 gap-3 pb-2">
-                                        {availableSlots.map((slot, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                disabled={slot.isBooked}
-                                                onClick={() => handleTimeSelection(slot.time)}
-                                                className={`p-3 rounded-lg border-2 text-sm font-bold transition-all ${
-                                                    slot.isBooked
-                                                        ? 'bg-red-50 border-red-100 text-red-400 cursor-not-allowed line-through'
-                                                        : tempTime.includes(slot.time)
-                                                            ? 'bg-pharmacy-gold border-pharmacy-gold text-pharmacy-green shadow-md transform scale-105'
-                                                            : 'bg-white border-emerald-100 text-emerald-700 hover:border-pharmacy-gold hover:text-pharmacy-gold-dark hover:bg-pharmacy-gold/10'
-                                                }`}
-                                            >
-                                                {slot.time}
-                                            </button>
-                                        ))}
+                                        {availableSlots.map((slot, idx) => {
+                                            let isClickable = true;
+                                            if (isGridDeepLink) {
+                                                const baseTimeStr = initialTime![0];
+                                                const profDuration = professionals.find(p => p.id.toString() === modalProfessionalId)?.default_duration_minutes || 15;
+                                                const baseDT = DateTime.fromFormat(baseTimeStr, 'HH:mm');
+                                                const slotDT = DateTime.fromFormat(slot.time, 'HH:mm');
+                                                const diff = slotDT.diff(baseDT, 'minutes').minutes;
+                                                
+                                                if (slot.time !== baseTimeStr && diff !== profDuration) {
+                                                    isClickable = false;
+                                                }
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    disabled={slot.isBooked || !isClickable}
+                                                    onClick={() => handleTimeSelection(slot.time)}
+                                                    className={`p-3 rounded-lg border-2 text-sm font-bold transition-all ${
+                                                        slot.isBooked
+                                                            ? 'bg-red-50 border-red-100 text-red-400 cursor-not-allowed line-through'
+                                                            : !isClickable
+                                                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                                                                : tempTime.includes(slot.time)
+                                                                    ? 'bg-pharmacy-gold border-pharmacy-gold text-pharmacy-green shadow-md transform scale-105'
+                                                                    : 'bg-white border-emerald-100 text-emerald-700 hover:border-pharmacy-gold hover:text-pharmacy-gold-dark hover:bg-pharmacy-gold/10'
+                                                    }`}
+                                                >
+                                                    {slot.time}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
