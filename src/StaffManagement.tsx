@@ -57,6 +57,7 @@ export default function StaffManagement() {
     // Edit Professional State
     const [editProfessionalId, setEditProfessionalId] = useState<string>('');
     const [editProfessionalName, setEditProfessionalName] = useState<string>('');
+    const [editProfessionalSpecialty, setEditProfessionalSpecialty] = useState<string>('');
 
     // System Components State
     const [newRoomLabel, setNewRoomLabel] = useState('');
@@ -160,10 +161,12 @@ export default function StaffManagement() {
             if (!currentSelected) {
                 setEditProfessionalId(professionals[0].id.toString());
                 setEditProfessionalName(professionals[0].full_name);
+                setEditProfessionalSpecialty(professionals[0].specialty);
             }
         } else {
             setEditProfessionalId('');
             setEditProfessionalName('');
+            setEditProfessionalSpecialty('');
         }
     }, [professionals]);
 
@@ -173,6 +176,7 @@ export default function StaffManagement() {
         const prof = professionals.find(p => p.id.toString() === id);
         if (prof) {
             setEditProfessionalName(prof.full_name);
+            setEditProfessionalSpecialty(prof.specialty);
         }
     };
 
@@ -217,22 +221,25 @@ export default function StaffManagement() {
         }
     };
 
-    const updateProfessionalName = async (e: React.FormEvent) => {
+    const updateProfessionalProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMessage('');
 
-        if (!editProfessionalName.trim()) {
-            setErrorMessage('Validation Error: The professional name cannot be strictly empty.');
+        if (!editProfessionalName.trim() || !editProfessionalSpecialty.trim()) {
+            setErrorMessage('Validation Error: The professional name and specialty cannot be strictly empty.');
             return;
         }
 
         setIsLoading(true);
         try {
-            // Updating the root entity automatically propagates the name change 
+            // Updating the root entity automatically propagates changes 
             // across all relational SQL JOINs (appointments, history, etc.)
             const { error } = await supabase
                 .from('professionals')
-                .update({ full_name: editProfessionalName.trim() })
+                .update({ 
+                    full_name: editProfessionalName.trim(),
+                    specialty: editProfessionalSpecialty.trim()
+                })
                 .eq('id', parseInt(editProfessionalId));
 
             if (error) {
@@ -744,7 +751,7 @@ export default function StaffManagement() {
                         </p>
                     </div>
 
-                    <form onSubmit={updateProfessionalName} className="flex flex-col gap-4">
+                    <form onSubmit={updateProfessionalProfile} className="flex flex-col gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Target Professional</label>
                             <select
@@ -759,22 +766,33 @@ export default function StaffManagement() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">New Full Name</label>
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Full Name</label>
                             <input
                                 type="text"
                                 value={editProfessionalName}
                                 onChange={(e) => setEditProfessionalName(e.target.value)}
-                                placeholder="E.g. Dr. Martha Spiteri-Galea"
+                                placeholder="E.g. Dr. Martha Spiteri"
+                                disabled={!editProfessionalId}
+                                className="w-full border border-pharmacy-ink/20 rounded-lg p-2 text-sm shadow-sm focus:border-pharmacy-gold focus:outline-none focus:ring-1 focus:ring-pharmacy-gold disabled:opacity-50 disabled:bg-pharmacy-cream/50"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-pharmacy-ink mb-1">Medical Specialty</label>
+                            <input
+                                type="text"
+                                value={editProfessionalSpecialty}
+                                onChange={(e) => setEditProfessionalSpecialty(e.target.value)}
+                                placeholder="E.g. Clinical Psychology"
                                 disabled={!editProfessionalId}
                                 className="w-full border border-pharmacy-ink/20 rounded-lg p-2 text-sm shadow-sm focus:border-pharmacy-gold focus:outline-none focus:ring-1 focus:ring-pharmacy-gold disabled:opacity-50 disabled:bg-pharmacy-cream/50"
                             />
                         </div>
                         <button
                             type="submit"
-                            disabled={isLoading || !editProfessionalId || !editProfessionalName.trim()}
+                            disabled={isLoading || !editProfessionalId || !editProfessionalName.trim() || !editProfessionalSpecialty.trim()}
                             className="w-full bg-pharmacy-ink text-white rounded-lg p-2.5 text-sm font-bold shadow-md hover:bg-pharmacy-ink/80 transition disabled:opacity-50"
                         >
-                            {isLoading ? 'Executing update...' : 'Update Name'}
+                            {isLoading ? 'Executing update...' : 'Update Profile'}
                         </button>
                     </form>
                 </div>
